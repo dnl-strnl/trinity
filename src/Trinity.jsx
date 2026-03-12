@@ -525,13 +525,12 @@ export default function Trinity() {
     const playerDir = g.pRole === "light" ? 1 : -1;
     const cShift = dmg * (winnerOwner === "player" ? playerDir : -playerDir);
 
-    applyC(g, cShift);
-
     const absShift = Math.abs(cShift);
     const label = cShift > 0 ? `+${absShift}C` : `−${absShift}C`;
     const color = cShift > 0 ? T.bless : T.curse;
 
-    enqF(label, { color, border: color, ...battleOpts, atkWon });
+    enqF(label, { color, border: color, icon: cShift > 0 ? "A" : "C", iconFont: FONT_TITLE, ...battleOpts, atkWon });
+    applyC(g, cShift);
     addLog(`${logPrefix} (${label} Meter)`);
   }
 
@@ -548,10 +547,10 @@ export default function Trinity() {
 
     const crossedZero = (prev > 0 && next < 0) || (prev < 0 && next > 0) || (prev !== 0 && next === 0);
     if (crossedZero) {
-      if (amt < 0 && g.pD.length && g.pRole === "light") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "⟐" }); }
-      else if (amt > 0 && g.aD.length && g.pRole === "light") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, sub: "Opponent" }); }
-      else if (amt > 0 && g.pD.length && g.pRole === "dark") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "⟐" }); }
-      else if (amt < 0 && g.aD.length && g.pRole === "dark") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, sub: "Opponent" }); }
+      if (amt < 0 && g.pD.length && g.pRole === "light") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
+      else if (amt > 0 && g.aD.length && g.pRole === "light") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
+      else if (amt > 0 && g.pD.length && g.pRole === "dark") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
+      else if (amt < 0 && g.aD.length && g.pRole === "dark") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
     }
 
     // Victory Conditions
@@ -578,12 +577,12 @@ export default function Trinity() {
         const pwr = cPwr(cell.cd);
         const cn = cell.cd.name || cell.cd.type;
         if (cell.cd.type === "blessing") {
-          applyC(g, pwr);
           enqF("TRAP REVEALED", { color: T.bless, border: T.bless, icon: "⚡", image: cell.cd.image, sub: `${cn} → +${pwr}C Meter` });
+          applyC(g, pwr);
           addLog(`⚡ TRAP ${cn}: +${pwr}C Meter`);
         } else {
-          applyC(g, -pwr);
           enqF("TRAP REVEALED", { color: T.curse, border: T.curse, icon: "⚡", image: cell.cd.image, sub: `${cn} → −${pwr}C Meter` });
+          applyC(g, -pwr);
           addLog(`⚡ TRAP ${cn}: −${pwr}C Meter`);
         }
         toPit(cell.cd, opp); g.bd[ar][ac] = null;
@@ -596,8 +595,8 @@ export default function Trinity() {
       if (cell && cell.fd && cell.ow === ow && (cell.cd.type === "blessing" || cell.cd.type === "curse")) {
         cell.fd = false;
         const pwr = cPwr(cell.cd);
-        if (cell.cd.type === "blessing") { applyC(g, pwr); enqF(`+${pwr}C`, { color: T.bless, border: T.bless, image: cell.cd.image }); addLog(`⚡ TRAP! ${cell.cd.name || "Blessing"} (+${pwr}C Meter)`); }
-        else { applyC(g, -pwr); enqF(`−${pwr}C`, { color: T.curse, border: T.curse, image: cell.cd.image }); addLog(`⚡ TRAP! ${cell.cd.name || "Curse"} (−${pwr}C Meter)`); }
+        if (cell.cd.type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, image: cell.cd.image }); applyC(g, pwr); addLog(`⚡ TRAP! ${cell.cd.name || "Blessing"} (+${pwr}C Meter)`); }
+        else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, image: cell.cd.image }); applyC(g, -pwr); addLog(`⚡ TRAP! ${cell.cd.name || "Curse"} (−${pwr}C Meter)`); }
         toPit(cell.cd, ow); g.bd[r][c] = null;
       }
     }
@@ -614,15 +613,15 @@ export default function Trinity() {
     }
     const playerDir = g.pRole === "light" ? 1 : -1;
     if (pCount > 0 && aCount === 0) {
-      applyC(g, playerDir);
       addLog(`✧ PRESENCE: ${playerDir > 0 ? "+1" : "-1"}C`);
-      enqF("PRESENCE", { color: playerDir > 0 ? T.bless : T.curse, icon: "✧", sub: `${playerDir > 0 ? "+1" : "-1"}C Meter Shift` });
+      enqF("PRESENCE", { color: playerDir > 0 ? T.bless : T.curse, icon: "P", iconFont: FONT_TITLE, sub: `${playerDir > 0 ? "+1" : "-1"}C Meter Shift` });
+      applyC(g, playerDir);
     } else if (aCount > 0 && pCount === 0) {
-      applyC(g, -playerDir);
       const shift = -playerDir;
       const label = shift > 0 ? `+${shift}` : `−${Math.abs(shift)}`;
       addLog(`✧ OPP PRESENCE: ${label}C`);
-      enqF("PRESENCE", { color: shift > 0 ? T.bless : T.curse, icon: "✧", sub: `Opp ${label}C Meter Shift` });
+      enqF("PRESENCE", { color: shift > 0 ? T.bless : T.curse, icon: "P", iconFont: FONT_TITLE, sub: `Opp ${label}C Meter Shift` });
+      applyC(g, -playerDir);
     }
   }
 
@@ -678,8 +677,8 @@ export default function Trinity() {
     if (game.act < cost) return; const g = { ...game, pH: [...game.pH], bd: game.bd.map(r => [...r]) };
     g.pH.splice(selH, 1); g.act -= cost;
     const pwr = cPwr(c);
-    if (type === "blessing") { applyC(g, pwr); enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: c.image, video: c.video }); addLog(`Play: ${c.name || "Blessing"} (+${pwr}C)`); }
-    else { applyC(g, -pwr); enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: c.image, video: c.video }); addLog(`Play: ${c.name || "Curse"} (−${pwr}C)`); }
+    if (type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: c.image, video: c.video }); applyC(g, pwr); addLog(`Play: ${c.name || "Blessing"} (+${pwr}C)`); }
+    else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: c.image, video: c.video }); applyC(g, -pwr); addLog(`Play: ${c.name || "Curse"} (−${pwr}C)`); }
     toPit(c, "player"); setGame(g); clr();
   }
   function doSetTrap() {
@@ -851,8 +850,8 @@ export default function Trinity() {
             s.aH.splice(s.aH.indexOf(sp), 1);
             const isB = sp.type === "blessing";
             const pwr = cPwr(sp); s.act--;
-            if (isB) { applyC(s, pwr); enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "\u25b3", image: sp.image, video: sp.video }); addLog(`Opp Play: ${sp.name || "Blessing"} (+${pwr}C)`); }
-            else { applyC(s, -pwr); enqF(`\u2212${pwr}C`, { color: T.curse, border: T.curse, icon: "\u25bd", image: sp.image, video: sp.video }); addLog(`Opp Play: ${sp.name || "Curse"} (−${pwr}C)`); }
+            if (isB) { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "\u25b3", image: sp.image, video: sp.video }); applyC(s, pwr); addLog(`Opp Play: ${sp.name || "Blessing"} (+${pwr}C)`); }
+            else { enqF(`\u2212${pwr}C`, { color: T.curse, border: T.curse, icon: "\u25bd", image: sp.image, video: sp.video }); applyC(s, -pwr); addLog(`Opp Play: ${sp.name || "Curse"} (−${pwr}C)`); }
             toPit(sp, "ai"); acted = true;
           }
         }
@@ -935,9 +934,8 @@ export default function Trinity() {
           if (cl.ow === "player" && cl.cd.type === "entity" && !cl.fd) pTgts.push({ r, c });
         }
         // ONLY move if there are player targets to pursue
-        if (pTgts.length === 0) return;
-
-        if (aiEnts.length) {
+        if (pTgts.length > 0) {
+          if (aiEnts.length) {
           const dist = (r1, c1, r2, c2) => Math.abs(r1 - r2) + Math.abs(c1 - c2);
           // Sort: entities furthest from any player entity move first
           aiEnts.sort((a, b) => {
@@ -963,6 +961,7 @@ export default function Trinity() {
           }
         }
       }
+    }
 
       else if (action === "draw") {
         if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D", sub: "Opponent" }); addLog(`Opp Draw`); acted = true; }
