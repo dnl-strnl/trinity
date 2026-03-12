@@ -519,8 +519,8 @@ export default function Trinity() {
 
   // Game engine — ownership-aware C shift helper
   // Winner pushes C toward their own win condition.
-  // Player light → player wins push +C, AI wins push -C
-  // Player dark  → player wins push -C, AI wins push +C
+  // Player light: player wins push +C, AI wins push -C
+  // Player dark: player wins push -C, AI wins push +C
   function combatC(g, dmg, winningStat, winnerOwner, battleOpts, atkCard, defCard, atkWon, logPrefix) {
     const playerDir = g.pRole === "light" ? 1 : -1;
     const cShift = dmg * (winnerOwner === "player" ? playerDir : -playerDir);
@@ -572,32 +572,30 @@ export default function Trinity() {
     const opp = mover === "player" ? "ai" : "player";
     adj(r, c).forEach(([ar, ac]) => {
       const cell = g.bd[ar]?.[ac];
-      if (cell && cell.fd && cell.ow === opp && (cell.cd.type === "blessing" || cell.cd.type === "curse")) {
-        cell.fd = false;
-        const pwr = cPwr(cell.cd);
-        const cn = cell.cd.name || cell.cd.type;
-        if (cell.cd.type === "blessing") {
-          enqF("TRAP REVEALED", { color: T.bless, border: T.bless, icon: "⚡", image: cell.cd.image, sub: `${cn} → +${pwr}C Meter` });
-          applyC(g, pwr);
-          addLog(`⚡ TRAP ${cn}: +${pwr}C Meter`);
-        } else {
-          enqF("TRAP REVEALED", { color: T.curse, border: T.curse, icon: "⚡", image: cell.cd.image, sub: `${cn} → −${pwr}C Meter` });
-          applyC(g, -pwr);
-          addLog(`⚡ TRAP ${cn}: −${pwr}C Meter`);
-        }
-        toPit(cell.cd, opp); g.bd[ar][ac] = null;
-      }
+      /* NOTE: Removed original Blessing/Curse proximity triggers to allow for
+       "defusing" via moving over. Proximity triggers can be added back for
+       specific "Ambush" entity types later if desired. */
     });
-  }
+
+    // Handle Defusal: If the mover LANDED on an opponent's trap
+    const landCell = g.bd[r][c];
+    if (landCell && landCell.fd && landCell.ow === opp && (landCell.cd.type === "blessing" || landCell.cd.type === "curse")) {
+        enqF("TRAP DEFUSED", { color: T.textDim, border: T.silverDim, icon: "⊘", sub: `Opp ${landCell.cd.name || "Trap"}` });
+        addLog(`⊘ Trap Defused: ${landCell.cd.name || "Trap"}`);
+        toPit(landCell.cd, opp);
+        // The mover's entity will overwrite this cell anyway in the calling function,
+        // but we clear it here for clarity or in case calling function doesn't overwrite it immediately.
+        g.bd[r][c] = null;
+    }
+}
   function flipSets(g, ow) {
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cell = g.bd[r][c];
-      if (cell && cell.fd && cell.ow === ow && (cell.cd.type === "blessing" || cell.cd.type === "curse")) {
-        cell.fd = false;
-        const pwr = cPwr(cell.cd);
-        if (cell.cd.type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, image: cell.cd.image }); applyC(g, pwr); addLog(`⚡ TRAP! ${cell.cd.name || "Blessing"} (+${pwr}C Meter)`); }
-        else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, image: cell.cd.image }); applyC(g, -pwr); addLog(`⚡ TRAP! ${cell.cd.name || "Curse"} (−${pwr}C Meter)`); }
-        toPit(cell.cd, ow); g.bd[r][c] = null;
+    // Decrement priming for the current player's traps
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        const cl = g.bd[r][c];
+        if (cl?.ow === ow && cl.fd && cl.prm > 0) {
+          cl.prm--;
+        }
       }
     }
   }
@@ -636,7 +634,7 @@ export default function Trinity() {
     const startG = {
       bd: Array.from({ length: 5 }, () => Array(5).fill(null)),
       pH: pD.splice(0, HAND_SIZE), aH: aD.splice(0, HAND_SIZE),
-      pD, aD, c: 0, turn, act: 3, tn: 1, ph: "playing", win: null, pRole
+      pD, aD, c: 0, turn, act: 3, tn: 1, ph: "playing", win: null, pRole, flips: 0
     };
     setGame(startG);
     setPit({ player: [], ai: [] }); clr(); setLog([`0C. ${turn === "player" ? "Your" : "Opponent"} turn.`]);
@@ -689,9 +687,12 @@ export default function Trinity() {
   function boardClick(r, c) {
     if (!game || game.turn !== "player" || game.ph !== "playing" || aiR) return;
     const isH = hl.some(([hr, hc]) => hr === r && hc === c);
+    const cell = game.bd[r][c];
+
     if (mode === "setTrap" && selH !== null && isH) {
       const g = { ...game, pH: [...game.pH], bd: game.bd.map(row => [...row]) };
-      const card = g.pH.splice(selH, 1)[0]; g.bd[r][c] = { cd: card, ow: "player", fd: true };
+      const card = g.pH.splice(selH, 1)[0];
+      g.bd[r][c] = { cd: card, ow: "player", fd: true, prm: 1 };
       enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "▼", image: card.image });
       addLog(`Set: Trap`);
       setGame(g); clr(); return;
@@ -716,20 +717,42 @@ export default function Trinity() {
       toPit(item, "player");
       setGame(g); clr(); return;
     }
-    const cell = game.bd[r][c];
+    if (cell?.ow === "player" && cell.fd && !mode) {
+      if (game.flips >= 2) { addLog("Max 2 flips per turn reached."); return; }
+      const cost = game.flips === 0 ? 1 : 0;
+      if (game.act < cost) { addLog("Need 1 action for first flip."); return; }
+
+      const pwr = cPwr(cell.cd);
+      const ready = (cell.prm || 0) <= 0;
+      if (!ready) { addLog(`Wait. Trap still priming... (${cell.prm} left)`); return; }
+
+      const g = { ...game, bd: game.bd.map(row => [...row]), flips: game.flips + 1, act: game.act - cost };
+      const isB = cell.cd.type === "blessing";
+      if (isB) { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: cell.cd.image, video: cell.cd.video }); applyC(g, pwr); addLog(`Trigger: ${cell.cd.name || "Blessing"} (+${pwr}C)`); }
+      else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: cell.cd.image, video: cell.cd.video }); applyC(g, -pwr); addLog(`Trigger: ${cell.cd.name || "Curse"} (−${pwr}C)`); }
+      toPit(cell.cd, "player"); g.bd[r][c] = null;
+      setGame(g); clr(); return;
+    }
+
     if (cell?.ow === "player" && cell.cd.type === "entity" && !cell.fd && mode !== "chooseStat") {
       setSelB([r, c]); setSelH(null); setInspCell([r, c]); const isT = aura(cell.cd) === 0;
       const a = adj(r, c, isT ? 2 : 1);
-      setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac]), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === "ai" && t.cd.type === "entity" && !t.fd; })]);
+      setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === "ai" && t.cd.type === "entity" && !t.fd; })]);
       setMode("moveOrTap"); return;
     }
     // Inspect: click any occupied cell when no mode is active
     if (cell && !mode && !selH) { setInspCell([r, c]); return; }
     if (mode === "moveOrTap" && selB && isH) {
       const [sr, sc] = selB;
-      if (!game.bd[r][c]) {
+      const dest = game.bd[r][c];
+      if (!dest || dest.fd) {
         if (game.act <= 0) return;
-        const g = { ...game, bd: game.bd.map(row => [...row]) }; g.bd[r][c] = g.bd[sr][sc]; g.bd[sr][sc] = null; g.act--; chkTraps(g, r, c, "player"); setGame(g); clr();
+        const g = { ...game, bd: game.bd.map(row => [...row]) };
+        const movingEnt = g.bd[sr][sc];
+        g.bd[sr][sc] = null;
+        chkTraps(g, r, c, "player");
+        g.bd[r][c] = movingEnt;
+        g.act--; setGame(g); clr();
       }
       else if (game.bd[r][c]?.ow === "ai") { if (game.act <= 0) return; setTapTgt([r, c]); setMode("chooseStat"); setHl([]); }
     }
@@ -757,219 +780,177 @@ export default function Trinity() {
   function endTurn() {
     if (!game || game.turn !== "player" || aiR) return;
     const g = { ...game, bd: game.bd.map(r => [...r]), aH: [...game.aH], aD: [...game.aD] };
-    g.turn = "ai"; g.act = 3; if (g.aD.length) g.aH.push(g.aD.shift()); flipSets(g, "ai"); g.tn++;
-    chkPressure(g);
+    g.turn = "ai"; g.act = 3; g.flips = 0; if (g.aD.length) g.aH.push(g.aD.shift()); flipSets(g, "ai"); g.tn++;
     setGame(g); clr(); addLog("— Opp —"); setAiR(true); setTimeout(() => runAI(g, 0), 500 + Math.random() * 1500);
   }
 
   function runAI(g, idx) {
-    if (g.ph === "over" || idx >= 3 || g.act <= 0) {
-      g.turn = "player"; g.act = 3; flipSets(g, "player");
+    if (g.ph === "over" || idx >= 5 || g.act <= 0) {
+      g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player");
       if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); }
-      chkPressure(g);
-      setGame({ ...g }); setAiR(false); return;
+      chkPressure(g); setGame({ ...g }); setAiR(false); return;
     }
     let s = { ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD] };
-    let acted = false;
+    const aiWantsPlus = s.pRole === "dark";
 
-    // Aggressive AI Tactics:
-    // 1. ALWAYS check for winning attacks first across the entire board
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        const cl = s.bd[r][c];
-        if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
-        const aRange = aura(cl.cd) === 0 ? 2 : 1;
-        for (const [tr, tc] of adj(r, c, aRange)) {
-          const tg = s.bd[tr][tc];
-          if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
+    const checkLethal = (amt) => {
+      const nextC = Math.min(Math.max(s.c + amt, -10), 10);
+      if (aiWantsPlus && nextC >= 10) return true;
+      if (!aiWantsPlus && nextC <= -10) return true;
+      return false;
+    };
 
-          const aS = getEff(cl.cd, s.bd, r, c, cl.ib);
-          const dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
-
-          // Find if there's any stat where AI wins ABSOLUTELY
-          let bestStat = null, maxDmg = 0;
-          for (const st of STAT_DEFS) {
-            const res = resolveCombat(aS, dS, st.key);
-            if (res.winner === "attacker" && res.dmg > maxDmg) {
-              maxDmg = res.dmg;
-              bestStat = st.key;
-            }
-          }
-
-          if (bestStat) {
-            const res = resolveCombat(aS, dS, bestStat);
-            const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${bestStat.toUpperCase()} |${aS[bestStat]}| vs |${dS[bestStat]}|` };
-            s.bd[tr][tc] = null; toPit(tg.cd, "player"); s.act--;
-            combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true,
-              `⚔ Opp ${cl.cd.name || "Atk"} |${Math.abs(aS[bestStat])}| > ${tg.cd.name || "Def"} |${Math.abs(dS[bestStat])}|`);
-            setGame({ ...s });
-            setTimeout(() => runAI(s, idx + 1), 700 + Math.random() * 800);
-            return;
-          }
-        }
+    // 1. LETHAL METER CHECK (Hand & Primed Traps)
+    const handSpells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
+    for (const sp of handSpells) {
+      const v = sp.type === "blessing" ? cPwr(sp) : -cPwr(sp);
+      if (checkLethal(v)) {
+        s.aH.splice(s.aH.indexOf(sp), 1); s.act--;
+        if (sp.type === "blessing") { enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image }); applyC(s, cPwr(sp)); }
+        else { enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image }); applyC(s, -cPwr(sp)); }
+        toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`);
+        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
       }
     }
-
-    // 2. If no winning attacks, proceed with other actions randomized
-    const tier1 = shuffle(["summon", "move"]);
-    const tier2 = shuffle(["spell", "equip", "terrain"]);
-    const tier3 = shuffle(["trap", "draw"]);
-    const actions = [...tier1, ...tier2, ...tier3];
-
-    for (const action of actions) {
-      if (acted) break;
-
-      if (action === "summon") {
-        const ents = s.aH.filter(x => x.type === "entity");
-        if (ents.length) {
-          const empty = []; for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) empty.push([r, c]);
-          if (empty.length) {
-            const card = ents[Math.floor(Math.random() * ents.length)]; s.aH.splice(s.aH.indexOf(card), 1);
-            const [sr, sc] = empty[Math.floor(Math.random() * empty.length)]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } };
-            s.act--;
-            enqF("SUMMON", { color: T.entity, border: T.entity, sub: "Opponent", image: card.image });
-            addLog(`Opp Summon: ${card.name || card.type}`);
-            acted = true;
-          }
-        }
-      }
-
-      else if (action === "spell") {
-        const spells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-        if (spells.length) {
-          // AI wants C toward its own win condition
-          // If player is light, AI wants -C. If player is dark, AI wants +C.
-          const aiWantsPlus = s.pRole === "dark";
-          const validSpells = spells.filter(sp => {
-            if (aiWantsPlus) return sp.type === "blessing";
-            return sp.type === "curse";
-          });
-
-          if (validSpells.length) {
-            const sp = validSpells[Math.floor(Math.random() * validSpells.length)];
-            s.aH.splice(s.aH.indexOf(sp), 1);
-            const isB = sp.type === "blessing";
-            const pwr = cPwr(sp); s.act--;
-            if (isB) { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "\u25b3", image: sp.image, video: sp.video }); applyC(s, pwr); addLog(`Opp Play: ${sp.name || "Blessing"} (+${pwr}C)`); }
-            else { enqF(`\u2212${pwr}C`, { color: T.curse, border: T.curse, icon: "\u25bd", image: sp.image, video: sp.video }); applyC(s, -pwr); addLog(`Opp Play: ${sp.name || "Curse"} (−${pwr}C)`); }
-            toPit(sp, "ai"); acted = true;
-          }
-        }
-      }
-
-      else if (action === "trap") {
-        // AI sets traps on player's side (rows 3-4)
-        const trappable = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-        if (trappable.length && Math.random() < 0.15) {
-          const aiWantsPlus = s.pRole === "dark";
-          const validTraps = trappable.filter(sp => {
-            if (aiWantsPlus) return sp.type === "blessing";
-            return sp.type === "curse";
-          });
-
-          if (validTraps.length) {
-            const empty = []; for (let r = 3; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) empty.push([r, c]);
-            if (empty.length) {
-              const card = validTraps[Math.floor(Math.random() * validTraps.length)]; s.aH.splice(s.aH.indexOf(card), 1);
-              const [tr, tc] = empty[Math.floor(Math.random() * empty.length)];
-              s.bd[tr][tc] = { cd: card, ow: "ai", fd: true }; s.act--;
-              enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S", sub: "Opponent" });
-              addLog(`Opp Set: Trap`);
-              acted = true;
-            }
-          }
-        }
-      }
-
-      else if (action === "terrain") {
-        const terrains = s.aH.filter(x => x.type === "terrain");
-        if (terrains.length) {
-          // Prefer placing near own entities for buffs, but MUST obey adjacency rule
-          const candidates = [];
-          for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-            if (s.bd[r][c] || hasAdjTerrain(r, c, s.bd)) continue;
-            const nearAlly = adj(r, c).some(([ar, ac]) => s.bd[ar]?.[ac]?.ow === "ai" && s.bd[ar][ac].cd.type === "entity");
-            candidates.push({ r, c, priority: nearAlly ? 2 : 1 });
-          }
-          if (candidates.length) {
-            candidates.sort((a, b) => b.priority - a.priority);
-            const best = candidates.filter(x => x.priority === candidates[0].priority);
-            const { r: tr, c: tc } = best[Math.floor(Math.random() * best.length)];
-            const card = terrains[Math.floor(Math.random() * terrains.length)]; s.aH.splice(s.aH.indexOf(card), 1);
-            s.bd[tr][tc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } }; s.act -= 2;
-            enqF("TERRAIN", { color: TC.terrain, border: TC.terrain, sub: "Opponent", image: card.image });
-            addLog(`Opp Terrain: ${card.name || "Terrain"}`);
-            acted = true;
-          }
-        }
-      }
-
-      else if (action === "equip") {
-        const equips = s.aH.filter(x => x.type === "equip");
-        if (equips.length) {
-          // Find AI entities on the board to equip
-          const aiEnts = [];
-          for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-            const cl = s.bd[r][c]; if (cl?.ow === "ai" && cl.cd.type === "entity" && !cl.fd) aiEnts.push({ r, c });
-          }
-          if (aiEnts.length) {
-            const item = equips[Math.floor(Math.random() * equips.length)]; s.aH.splice(s.aH.indexOf(item), 1);
-            const { r: er, c: ec } = aiEnts[Math.floor(Math.random() * aiEnts.length)];
-            const cell = { ...s.bd[er][ec] };
-            STAT_DEFS.forEach(st => { cell.ib[st.key] = (cell.ib?.[st.key] || 0) + (item[st.key] || 0); });
-            s.bd[er][ec] = cell; s.act--;
-            enqF("EQUIP", { color: T.equip, border: T.equip, icon: "\u2295", image: item.image, sub: "Opponent" });
-            addLog(`Opp Equip: ${item.name || "Equip"}`);
-            toPit(item, "ai"); acted = true;
-          }
-        }
-      }
-
-      else if (action === "move") {
-        // Find all AI entities and player entity positions
-        const aiEnts = [], pTgts = [];
+    if (s.flips < 2) {
+      const cost = s.flips === 0 ? 1 : 0;
+      if (s.act >= cost) {
         for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-          const cl = s.bd[r][c]; if (!cl) continue;
-          if (cl.ow === "ai" && cl.cd.type === "entity" && !cl.fd) aiEnts.push({ r, c, cd: cl.cd });
-          if (cl.ow === "player" && cl.cd.type === "entity" && !cl.fd) pTgts.push({ r, c });
-        }
-        // ONLY move if there are player targets to pursue
-        if (pTgts.length > 0) {
-          if (aiEnts.length) {
-          const dist = (r1, c1, r2, c2) => Math.abs(r1 - r2) + Math.abs(c1 - c2);
-          // Sort: entities furthest from any player entity move first
-          aiEnts.sort((a, b) => {
-            const aMin = Math.min(...pTgts.map(t => dist(a.r, a.c, t.r, t.c)));
-            const bMin = Math.min(...pTgts.map(t => dist(b.r, b.c, t.r, t.c)));
-            return bMin - aMin;
-          });
-          for (const ent of aiEnts) {
-            if (acted) break;
-            const moves = adj(ent.r, ent.c).filter(([nr, nc]) => !s.bd[nr][nc]);
-            if (!moves.length) continue;
-            // Pick move that minimizes distance to closest player entity (must be BETTER than current)
-            let bestMove = null, bestDist = Math.min(...pTgts.map(t => dist(ent.r, ent.c, t.r, t.c)));
-            for (const [nr, nc] of moves) {
-              const d = Math.min(...pTgts.map(t => dist(nr, nc, t.r, t.c)));
-              if (d < bestDist) { bestDist = d; bestMove = [nr, nc]; }
-            }
-            if (bestMove) {
-              const [nr, nc] = bestMove;
-              s.bd[nr][nc] = s.bd[ent.r][ent.c]; s.bd[ent.r][ent.c] = null; s.act--;
-              chkTraps(s, nr, nc, "ai"); addLog(`Opp Move: ${ent.cd.name || "Entity"}`); acted = true;
+          const cl = s.bd[r][c];
+          if (cl?.ow === "ai" && cl.fd && (cl.prm || 0) <= 0) {
+            const v = cl.cd.type === "blessing" ? cPwr(cl.cd) : -cPwr(cl.cd);
+            if (checkLethal(v)) {
+              if (cl.cd.type === "blessing") { enqF(`+${Math.abs(v)}C`, { color: T.bless, border: T.bless, icon: "△", image: cl.cd.image }); applyC(s, Math.abs(v)); }
+              else { enqF(`−${Math.abs(v)}C`, { color: T.curse, border: T.curse, icon: "▽", image: cl.cd.image }); applyC(s, -Math.abs(v)); }
+              toPit(cl.cd, "ai"); s.bd[r][c] = null; s.flips++; s.act -= cost;
+              addLog(`Opp LETHAL Trap: ${cl.cd.name || "Trap"}`);
+              setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
             }
           }
         }
       }
     }
 
-      else if (action === "draw") {
-        if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D", sub: "Opponent" }); addLog(`Opp Draw`); acted = true; }
+    // 2. LETHAL BOARD ATTACKS (Max Damage Stat)
+    let bestAtk = null, maxD = -1;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c];
+      if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
+      const range = aura(cl.cd) === 0 ? 2 : 1;
+      for (const [tr, tc] of adj(r, c, range)) {
+        const tg = s.bd[tr][tc];
+        if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
+        const aS = getEff(cl.cd, s.bd, r, c, cl.ib), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
+        for (const st of STAT_DEFS) {
+          const res = resolveCombat(aS, dS, st.key);
+          if (res.winner === "attacker" && res.dmg > maxD) {
+            maxD = res.dmg; bestAtk = { r, c, tr, tc, stat: st.key, cl, tg, aS, dS, res };
+          }
+        }
+      }
+    }
+    if (bestAtk) {
+      const { tr, tc, stat, cl, tg, aS, dS, res } = bestAtk;
+      const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${stat.toUpperCase()} |${aS[stat]}| vs |${dS[stat]}|` };
+      s.bd[tr][tc] = null; toPit(tg.cd, "player"); s.act--;
+      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ Opp ${cl.cd.name || "Atk"} |${Math.abs(aS[stat])}| > ${tg.cd.name || "Def"}`);
+      setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+    }
+
+    // 3. DEFUSAL AGGRESSION
+    const aiE = [], pT = [];
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (!cl) continue;
+      if (cl.ow === "ai" && cl.cd.type === "entity" && !cl.fd) aiE.push({ r, c, cl });
+      if (cl.ow === "player" && cl.fd) pT.push({ r, c });
+    }
+    if (pT.length && aiE.length) {
+      for (const { r, c, cl } of aiE) {
+        const dMoves = adj(r, c).filter(([nr, nc]) => s.bd[nr]?.[nc]?.ow === "player" && s.bd[nr][nc].fd);
+        if (dMoves.length) {
+          const [tr, tc] = dMoves[0]; const mEnt = s.bd[r][c]; s.bd[r][c] = null;
+          chkTraps(s, tr, tc, "ai"); s.bd[tr][tc] = mEnt; s.act--;
+          addLog(`Opp Defuse: ${cl.cd.name || "Entity"}`);
+          setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+        }
       }
     }
 
-    setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 500 + Math.random() * 1500);
+    // 4. POSITIONING / TARGETED
+    const pE = [];
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (cl?.ow === "player" && cl.cd.type === "entity" && !cl.fd) pE.push({ r, c, cl });
+    }
+    if (aiE.length) {
+      for (const { r, c, cl } of aiE) {
+        const range = aura(cl.cd) === 0 ? 2 : 1;
+        const moves = adj(r, c).filter(([nr, nc]) => !s.bd[nr][nc] || s.bd[nr][nc]?.fd);
+        for (const [nr, nc] of moves) {
+          if (pE.some(p => {
+            const d = Math.abs(nr - p.r) + Math.abs(nc - p.c);
+            if (d > range) return false;
+            const aS = getEff(cl.cd, s.bd, nr, nc, cl.ib), dS = getEff(p.cl.cd, s.bd, p.r, p.c, p.cl.ib);
+            return STAT_DEFS.some(st => Math.abs(aS[st.key]) > Math.abs(dS[st.key]));
+          })) {
+            const mEnt = s.bd[r][c]; s.bd[r][c] = null; chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
+            addLog(`Opp Stalk: ${cl.cd.name || "Entity"}`);
+            setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+          }
+        }
+      }
+      const ent = aiE[0]; const moves = adj(ent.r, ent.c).filter(([nr, nc]) => !s.bd[nr][nc] || s.bd[nr][nc]?.fd);
+      if (moves.length) {
+        const t = pE.length ? pE[0] : { r: 4, c: 2 };
+        let bestM = null, minD = 99;
+        for (const [nr, nc] of moves) {
+          const d = Math.abs(nr - t.r) + Math.abs(nc - t.c);
+          if (d < minD) { minD = d; bestM = [nr, nc]; }
+        }
+        if (bestM) {
+          const [nr, nc] = bestM; const mEnt = s.bd[ent.r][ent.c]; s.bd[ent.r][ent.c] = null;
+          chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
+          addLog(`Opp Advance: ${ent.cl.cd.name || "Entity"}`);
+          setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+        }
+      }
+    }
+
+
+    // AI economics: summon, draw, or SET trap
+    const cSum = s.aH.filter(x => x.type === "entity");
+    const trappable = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
+
+    if (cSum.length) {
+      const emp = []; for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
+      if (emp.length) {
+        const card = cSum[0]; s.aH.splice(s.aH.indexOf(card), 1);
+        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } };
+        s.act--; enqF("SUMMON", { color: T.entity, border: T.entity, image: card.image });
+        addLog(`Opp Summon: ${card.name || "Entity"}`);
+        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+      }
+    }
+    if (trappable.length && s.act >= 1 && Math.random() < 0.2) {
+      const emp = []; for (let r = 3; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
+      if (emp.length) {
+        const card = trappable[0]; s.aH.splice(s.aH.indexOf(card), 1);
+        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: true, prm: 1 };
+        enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S" });
+        addLog(`Opp Set: Trap`);
+        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+      }
+    }
+    if (s.aD.length) {
+      s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
+      addLog(`Opp Draw`); setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+    }
+
+    g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player"); g.tn++;
+    if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); }
+    chkPressure(g); setGame({ ...g }); setAiR(false);
   }
+
+
 
   // Forge / import
   async function handleImg(e) {
@@ -1130,7 +1111,7 @@ export default function Trinity() {
 
     setCardPool(prev => [...prev, ...newCards]);
     setSets(prev => [...prev, { id: "gen_" + ts, name, cardIds: newCards.map(c => c.id) }]);
-    enqF("SET GENERATED", { color: T.silverBright, border: T.silver, icon: "◈", sub: `${newCards.length} cards → ${name}` });
+    enqF("SET GENERATED", { color: T.silverBright, border: T.silver, icon: "◈", sub: `${newCards.length} cards: ${name}` });
     return newCards.length;
   }
 
@@ -1171,7 +1152,7 @@ export default function Trinity() {
 
       <main style={{ flex: 1, overflow: tab === "play" && game ? "hidden" : "auto", padding: "6px 10px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
 
-        {/* ═══ PLAY LOBBY ═══ */}
+        {/* Play lobby */}
         {tab === "play" && !game && (
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Trinity</div>
@@ -1232,7 +1213,7 @@ export default function Trinity() {
           </div>
         )}
 
-        {/* ═══ PLAY GAME — cards FILL cells ═══ */}
+        {/* Play game - card images FILL cells */}
         {tab === "play" && game && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, height: "calc(100vh - 40px)", animation: "fadeIn .3s", overflow: "hidden" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
@@ -1517,7 +1498,7 @@ export default function Trinity() {
                   <div style={{ marginBottom: 10 }}>
                     <label style={LBL}>GENERATION MODE</label>
                     <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
-                      {[["permute", "All Permutations"], ["random", "Random (rarity→power)"]].map(([m, l]) => (
+                      {[["permute", "All Permutations"], ["random", "Random (rarity >> power)"]].map(([m, l]) => (
                         <button key={m} onClick={() => setGenMode(m)} style={{
                           flex: 1, padding: "5px 8px", border: `1px solid ${genMode === m ? T.silverBright : T.panelBorder}`,
                           background: genMode === m ? T.silver + "12" : T.bg2, borderRadius: 3, cursor: "pointer",
