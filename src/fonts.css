@@ -1,0 +1,16 @@
+/* Custom fonts from /public/fonts/ registered here
+   Then, update FONT_TITLE / FONT_UI / FONT_BODY in theme.js */
+
+@font-face {
+  font-family: 'Cloister Black';
+  src: url('/fonts/CloisterBlack.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Matrix Small Caps';
+  src: url('/fonts/MatrixSmallCapsRoman.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}

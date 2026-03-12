@@ -1,0 +1,19 @@
+[project]
+name = "trinity-backend"
+version = "0.1.0"
+description = "Trinity Backend"
+authors = [{name = "dnl-strnl", email = "129630837+dnl-strnl@users.noreply.github.com"}]
+readme = "README.md"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.6",
+]
+requires-python = ">=3.10"
+
+[tool.poetry]
+packages = [{include = "server.py"}]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
