@@ -106,7 +106,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif msg_type == "sync_state":
                 gm.game_state = data.get("state")
-                await gm.broadcast({"type": "state_update", "state": gm.game_state})
+                response = {"type": "state_update", "state": gm.game_state}
+                if "flash" in data: response["flash"] = data["flash"]
+                if "sound" in data: response["sound"] = data["sound"]
+                if "sender" in data: response["sender"] = data["sender"]
+                await gm.broadcast(response)
+
+            elif msg_type in ["sync_anim", "sync_sfx"]:
+                await gm.broadcast(data)
 
             elif msg_type == "reset":
                 gm.reset()

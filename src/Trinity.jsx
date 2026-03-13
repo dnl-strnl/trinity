@@ -57,7 +57,7 @@ function cPwr(cd) {
   return Math.abs(cd.soul || 0) + Math.abs(cd.mind || 0) + Math.abs(cd.will || 0);
 }
 
-function Card({ card, sz, fill, onClick, sel, fDown, dim, owner, sparkle, noRar, notOwned, mask, effStats }) {
+function Card({ card, sz, fill, onClick, sel, fDown, dim, owner, sparkle, noRar, notOwned, mask, effStats, viewerRole }) {
   if (!card) return null;
   const w = fill ? "100%" : sz;
   const h = fill ? "100%" : undefined;
@@ -136,30 +136,37 @@ function Card({ card, sz, fill, onClick, sel, fDown, dim, owner, sparkle, noRar,
           height: stripH, flexShrink: 0, padding: "0 3px", display: "flex", alignItems: "center", gap: fill ? 5 : 2,
           background: T.card, borderTop: `1px solid ${T.panelBorder}`
         }}>
-          {card.type !== "entity" && <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-            <span style={{
-              fontSize: fs - 1, color: TC[card.type], fontFamily: FONT_UI,
-              textTransform: "uppercase", fontWeight: 800, flexShrink: 0
-            }}>{card.type}</span>
-            {(card.type === "blessing" || card.type === "curse") && (
-              <span style={{ fontSize: fs, fontFamily: FONT_UI, fontWeight: 900, color: card.type === "blessing" ? T.bless : T.curse }}>
-                {card.type === "blessing" ? "+" : "−"}{cPwr(card)}C
-              </span>
-            )}
-          </div>}
-          {card.type === "entity" && <div style={{ display: "flex", gap: fill ? 6 : (sz || 80) < 60 ? 2 : 4, width: "100%", justifyContent: "center" }}>
-            {STAT_DEFS.map(s => {
-              const base = card[s.key] || 0;
-              const v = effStats ? (effStats[s.key] ?? base) : base;
-              const buffed = effStats && v !== base;
-              return (
-                <span key={s.key} style={{
-                  fontSize: fs, fontFamily: FONT_UI, fontWeight: 900,
-                  color: v > 0 ? s.color : v < 0 ? T.curse : T.textDim,
-                  textShadow: buffed ? `0 0 6px ${v > base ? s.color : T.curse}99` : "none",
-                }}>{s.label}{v > 0 ? "+" : ""}{v}</span>);
-            })}
-          </div>}
+          {(() => {
+            const isSecret = fDown && owner && viewerRole && owner !== viewerRole;
+            if (isSecret) return <span style={{ fontSize: fs, color: T.textDim, fontFamily: FONT_UI, fontWeight: 800, width: "100%", textAlign: "center" }}>SET</span>;
+
+            return (<>
+              {card.type !== "entity" && <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+                <span style={{
+                  fontSize: fs - 1, color: TC[card.type], fontFamily: FONT_UI,
+                  textTransform: "uppercase", fontWeight: 800, flexShrink: 0
+                }}>{card.type}</span>
+                {(card.type === "blessing" || card.type === "curse") && (
+                  <span style={{ fontSize: fs, fontFamily: FONT_UI, fontWeight: 900, color: card.type === "blessing" ? T.bless : T.curse }}>
+                    {card.type === "blessing" ? "+" : "−"}{cPwr(card)}C
+                  </span>
+                )}
+              </div>}
+              {card.type === "entity" && <div style={{ display: "flex", gap: fill ? 6 : (sz || 80) < 60 ? 2 : 4, width: "100%", justifyContent: "center" }}>
+                {STAT_DEFS.map(s => {
+                  const base = card[s.key] || 0;
+                  const v = effStats ? (effStats[s.key] ?? base) : base;
+                  const buffed = effStats && v !== base;
+                  return (
+                    <span key={s.key} style={{
+                      fontSize: fs, fontFamily: FONT_UI, fontWeight: 900,
+                      color: v > 0 ? s.color : v < 0 ? T.curse : T.textDim,
+                      textShadow: buffed ? `0 0 6px ${v > base ? s.color : T.curse}99` : "none",
+                    }}>{s.label}{v > 0 ? "+" : ""}{v}</span>);
+                })}
+              </div>}
+            </>);
+          })()}
           {(card.type === "equip" || card.type === "terrain") && <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
             {STAT_DEFS.map(s => {
               const v = card[s.key] || 0; return v !== 0 ? (
@@ -176,7 +183,8 @@ function Card({ card, sz, fill, onClick, sel, fDown, dim, owner, sparkle, noRar,
 function Flash({ flash }) {
   useEffect(() => {
     if (flash?.video && flash?.onVideoEnd) {
-      const t = setTimeout(() => flash.onVideoEnd(), 4000);
+      const wait = flash.dur !== undefined ? flash.dur : 1000;
+      const t = setTimeout(() => flash.onVideoEnd(), wait);
       return () => clearTimeout(t);
     }
   }, [flash]);
@@ -200,7 +208,7 @@ function Flash({ flash }) {
         {isBattle ? (<>
           <div style={{ textAlign: "center" }}>
             <div style={{
-              width: 110, height: 110, borderRadius: 4, border: `2px solid ${flash.atkWon ? T.bless : T.curse}`,
+              width: 240, height: 240, borderRadius: 4, border: `2px solid ${flash.atkWon ? T.bless : T.curse}`,
               background: `url(${flash.atkCard.image}) center/cover`, transition: "all .6s",
               animation: flash.atkWon ? "none" : "battleLoseL 1.8s ease-in forwards", animationDelay: "0.8s",
               opacity: 1
@@ -220,7 +228,7 @@ function Flash({ flash }) {
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{
-              width: 110, height: 110, borderRadius: 4, border: `2px solid ${!flash.atkWon ? T.bless : T.curse}`,
+              width: 240, height: 240, borderRadius: 4, border: `2px solid ${!flash.atkWon ? T.bless : T.curse}`,
               background: `url(${flash.defCard.image}) center/cover`, transition: "all .6s",
               animation: !flash.atkWon ? "none" : "battleLoseR 1.8s ease-in forwards", animationDelay: "0.8s",
               opacity: 1
@@ -326,7 +334,16 @@ export default function Trinity() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
 
-  const playSfx = useCallback((type) => {
+  // ═══ MULTIPLAYER STATE ═══
+  const [mMode, setMMode] = useState(false);
+  const [mRole, setMRole] = useState(null); // "player", "ai", or "spectator"
+  const [mTaken, setMTaken] = useState([]);
+  const [mOppDeck, setMOppDeck] = useState(null);
+  const [mWait, setMWait] = useState(false);
+  const ws = useRef(null);
+  const mRoleRef = useRef(null);
+
+  const playSfx = useCallback((type, fromRemote = false) => {
     if (!audioEnabled || muted) return;
     
     let url = "";
@@ -347,21 +364,42 @@ export default function Trinity() {
       a.volume = 0.4;
       a.play().catch(() => {});
     }
-  }, [audioEnabled, muted]);
+
+    if (mMode && ws.current?.readyState === WebSocket.OPEN && !fromRemote) {
+      // Broadcast specific sounds
+      if (type.startsWith("battle-") || type.startsWith("revenance") || type === "diffuse") {
+        ws.current.send(JSON.stringify({ type: "sync_sfx", sound: type, sender: mRoleRef.current }));
+      }
+    }
+  }, [audioEnabled, muted, mMode]);
 
   const [flash, setFlash] = useState(null); const fQ = useRef([]); const fB = useRef(false);
-  const enqF = useCallback((text, opts = {}) => { fQ.current.push({ text, ...opts }); if (!fB.current) drF(); }, []);
+  const enqF = useCallback((text, opts = {}) => { 
+    fQ.current.push({ text, ...opts }); 
+    if (!fB.current) drF(); 
+    
+    if (mMode && ws.current?.readyState === WebSocket.OPEN && !opts.fromRemote) {
+      // Do not broadcast local-only or private animations, but DO broadcast battle logic and game-ending states
+      if (!["DRAW", "SET", "SUMMON", "TERRAIN", "EQUIP"].includes(text)) {
+        ws.current.send(JSON.stringify({ 
+          type: "sync_anim", 
+          flash: { text, opts: { ...opts, fromRemote: true } }, 
+          sender: mRoleRef.current 
+        }));
+      }
+    }
+  }, [mMode]);
   function drF() {
     if (!fQ.current.length) { fB.current = false; return; } fB.current = true;
     const f = fQ.current.shift();
     if (f.video) {
       f.onVideoEnd = () => { setFlash(null); setTimeout(drF, 120); };
       setFlash(f);
-      // fallback in case video fails to fire ended
-      setTimeout(() => { setFlash(null); setTimeout(drF, 120); }, 6000);
+      const wait = f.dur !== undefined ? f.dur + 500 : 7000;
+      setTimeout(() => { if (flash === f) { setFlash(null); setTimeout(drF, 120); } }, wait);
     } else {
       setFlash(f);
-      const dur = f.atkCard ? 2600 : f.image ? 1800 : 1100;
+      const dur = f.dur !== undefined ? f.dur : (f.atkCard ? 2600 : f.image ? 1800 : 1100);
       setTimeout(() => { setFlash(null); setTimeout(drF, 120); }, dur);
     }
   }
@@ -397,15 +435,6 @@ export default function Trinity() {
     blessPwrMin: 1, blessPwrMax: 3, cursePwrMin: 1, cursePwrMax: 3,
     rarCommon: 64, rarUncommon: 24, rarRare: 8, rarLegendary: 4,
   });
-
-  // ═══ MULTIPLAYER STATE ═══
-  const [mMode, setMMode] = useState(false);
-  const [mRole, setMRole] = useState(null); // "player", "ai", or "spectator"
-  const [mTaken, setMTaken] = useState([]);
-  const [mOppDeck, setMOppDeck] = useState(null);
-  const [mWait, setMWait] = useState(false);
-  const ws = useRef(null);
-  const mRoleRef = useRef(null);
 
   useEffect(() => {
     let socket = null;
@@ -457,6 +486,14 @@ export default function Trinity() {
           enqF("BATTLE START", { color: T.silverBright, icon: "\u2694" });
         } else if (msg.type === "state_update") {
           setGame(msg.state);
+        } else if (msg.type === "sync_anim") {
+          if (msg.sender !== mRoleRef.current && msg.flash) {
+            enqF(msg.flash.text, msg.flash.opts);
+          }
+        } else if (msg.type === "sync_sfx") {
+          if (msg.sender !== mRoleRef.current && msg.sound) {
+            playSfx(msg.sound, true);
+          }
         } else if (msg.type === "game_reset") {
           setGame(null);
           setMMode(false);
@@ -802,13 +839,11 @@ export default function Trinity() {
     const playerDir = g.pRole === "light" ? 1 : -1;
     if (pCount > 0 && aCount === 0) {
       addLog(`✧ PRESENCE: ${playerDir > 0 ? "+1" : "-1"}C`);
-      enqF("PRESENCE", { color: playerDir > 0 ? T.bless : T.curse, icon: "P", iconFont: FONT_TITLE, sub: `${playerDir > 0 ? "+1" : "-1"}C Meter Shift` });
       applyC(g, playerDir);
     } else if (aCount > 0 && pCount === 0) {
       const shift = -playerDir;
       const label = shift > 0 ? `+${shift}` : `−${Math.abs(shift)}`;
       addLog(`✧ OPP PRESENCE: ${label}C`);
-      enqF("PRESENCE", { color: shift > 0 ? T.bless : T.curse, icon: "P", iconFont: FONT_TITLE, sub: `Opp ${label}C Meter Shift` });
       applyC(g, -playerDir);
     }
   }
@@ -1065,178 +1100,151 @@ export default function Trinity() {
     }
     let s = { ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD] };
     const aiWantsPlus = s.pRole === "dark";
-
     const checkLethal = (amt) => {
-      const nextC = Math.min(Math.max(s.c + amt, -10), 10);
-      if (aiWantsPlus && nextC >= 10) return true;
-      if (!aiWantsPlus && nextC <= -10) return true;
-      return false;
+      const nextC = Math.min(Math.max(s.c + amt, -C_MAX), C_MAX);
+      return (aiWantsPlus && nextC >= C_MAX) || (!aiWantsPlus && nextC <= -C_MAX);
     };
-
     const delay = (ms = 1200) => setTimeout(() => runAI(s, idx + 1), ms);
 
-    // 1. LETHAL METER CHECK (Hand & Primed Traps)
-    const handSpells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-    for (const sp of handSpells) {
+    // --- 1. LETHAL CHECK ---
+    const spells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
+    for (const sp of spells) {
       const v = sp.type === "blessing" ? cPwr(sp) : -cPwr(sp);
       if (checkLethal(v)) {
-        s.aH.splice(s.aH.indexOf(sp), 1); s.act--;
-        playSfx("action");
+        s.aH.splice(s.aH.indexOf(sp), 1); s.act--; playSfx("action");
         if (sp.type === "blessing") { enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image }); applyC(s, cPwr(sp)); }
         else { enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image }); applyC(s, -cPwr(sp)); }
-        toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`);
-        setGame({ ...s }); delay(); return;
+        toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`); setGame({ ...s }); delay(); return;
       }
     }
-    if (s.flips < 2) {
-      const cost = s.flips === 0 ? 1 : 0;
-      if (s.act >= cost) {
-        for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-          const cl = s.bd[r][c];
-          if (cl?.ow === "ai" && cl.fd && (cl.prm || 0) <= 0) {
-            const v = cl.cd.type === "blessing" ? cPwr(cl.cd) : -cPwr(cl.cd);
-            if (checkLethal(v)) {
-              playSfx("action");
-              if (cl.cd.type === "blessing") { enqF(`+${Math.abs(v)}C`, { color: T.bless, border: T.bless, icon: "△", image: cl.cd.image }); applyC(s, Math.abs(v)); }
-              else { enqF(`−${Math.abs(v)}C`, { color: T.curse, border: T.curse, icon: "▽", image: cl.cd.image }); applyC(s, -Math.abs(v)); }
-              toPit(cl.cd, "ai"); s.bd[r][c] = null; s.flips++; s.act -= cost;
-              addLog(`Opp LETHAL Trap: ${cl.cd.name || "Trap"}`);
-              setGame({ ...s }); delay(); return;
-            }
-          }
-        }
-      }
-    }
-
-    // 2. LETHAL BOARD ATTACKS (Max Damage Stat)
-    let bestAtk = null, maxD = -1;
+    
+    // --- 2. BOARD ATTACK ---
+    let bestAtk = null, maxD = -999;
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cl = s.bd[r][c];
-      if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
+      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
       const range = aura(cl.cd) === 0 ? 2 : 1;
       for (const [tr, tc] of adj(r, c, range)) {
-        const tg = s.bd[tr][tc];
-        if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
+        const tg = s.bd[tr][tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
         const aS = getEff(cl.cd, s.bd, r, c, cl.ib), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
-        for (const st of STAT_DEFS) {
+        STAT_DEFS.forEach(st => {
           const res = resolveCombat(aS, dS, st.key);
-          if (res.winner === "attacker" && res.dmg > maxD) {
-            maxD = res.dmg; bestAtk = { r, c, tr, tc, stat: st.key, cl, tg, aS, dS, res };
-          }
-        }
+          const val = res.winner === "attacker" ? res.dmg : (res.winner === "tie" ? -1 : -20 - res.dmg);
+          if (val > maxD) { maxD = val; bestAtk = { r, c, tr, tc, stat: st.key, cl, tg, aS, dS, res }; }
+        });
       }
     }
-    if (bestAtk) {
+    if (bestAtk && maxD >= 0) {
       const { tr, tc, stat, cl, tg, aS, dS, res } = bestAtk;
-      const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${stat.toUpperCase()} |${aS[stat]}| vs |${dS[stat]}|` };
+      const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${stat.toUpperCase()} |${Math.abs(aS[stat])}| vs |${Math.abs(dS[stat])}|` };
       s.bd[tr][tc] = null; toPit(tg.cd, "player"); s.act--;
-      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ Opp ${cl.cd.name || "Atk"} |${Math.abs(aS[stat])}| > ${tg.cd.name || "Def"}`, stat);
+      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ ${cl.cd.name || "Atk"} > ${tg.cd.name || "Def"}`, stat);
       setGame({ ...s }); delay(1600); return;
     }
 
-    // 3. DEFUSAL AGGRESSION
-    const aiE = [], pT = [];
+    // --- 3. SCORING PHASE (MOVING / SUMMONING) ---
+    const evalPos = (r, c, card, isMove) => {
+      let score = 0;
+      // Preference for center
+      const distToCenter = Math.abs(r - 2) + Math.abs(c - 2);
+      score += (4 - distToCenter) * 10;
+      // Spreading out from allied entities
+      let minDistAllied = 99;
+      for (let cr = 0; cr < 5; cr++) for (let cc = 0; cc < 5; cc++) {
+        const cl = s.bd[cr][cc];
+        if (cl && cl.ow === "ai" && cl.cd.type === "entity" && (cr !== r || cc !== c)) {
+          const d = Math.abs(r - cr) + Math.abs(cc - cc);
+          if (d < minDistAllied) minDistAllied = d;
+        }
+      }
+      if (minDistAllied === 1) score -= 15; // Don't cluster
+      else if (minDistAllied === 2) score += 5;
+      else if (minDistAllied === 99) score += 10; // First one on board is fine
+
+      // Defusing traps
+      if (s.bd[r][c]?.ow === "player" && s.bd[r][c]?.fd) score += 60;
+
+      // Aggression: can we attack someone from here next turn?
+      const range = aura(card) === 0 ? 2 : 1;
+      let targets = 0;
+      adj(r, c, range).forEach(([tr, tc]) => {
+        const tg = s.bd[tr][tc];
+        if (tg && tg.ow === "player" && tg.cd.type === "entity" && !tg.fd) {
+          const aS = getEff(card, s.bd, r, c, {}), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
+          const hasGoodMatchup = STAT_DEFS.some(st => Math.abs(aS[st.key]) > Math.abs(dS[st.key]));
+          if (hasGoodMatchup) targets += 20; else targets += 5;
+        }
+      });
+      score += targets;
+
+      // Resource Guard: Avoid moving adjacent if we can't attack now and they can attack us next turn
+      if (isMove && s.act < 2) {
+        adj(r, c, 1).forEach(([ar, ac]) => {
+          const tg = s.bd[ar][ac];
+          if (tg && tg.ow === "player" && tg.cd.type === "entity" && !tg.fd) score -= 40;
+        });
+      }
+
+      return score;
+    };
+
+    // Evaluate Moves
+    let bestMove = null, bestMoveScr = -999;
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cl = s.bd[r][c]; if (!cl) continue;
-      if (cl.ow === "ai" && cl.cd.type === "entity" && !cl.fd) aiE.push({ r, c, cl });
-      if (cl.ow === "player" && cl.fd) pT.push({ r, c });
+      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
+      adj(r, c).forEach(([nr, nc]) => {
+        if (s.bd[nr][nc] && (!s.bd[nr][nc].fd || s.bd[nr][nc].ow === "ai")) return;
+        if (cl.summonedThisTurn && nr <= r) return;
+        const scr = evalPos(nr, nc, cl.cd, true);
+        if (scr > bestMoveScr) { bestMoveScr = scr; bestMove = { fr: r, fc: c, tr: nr, tc: nc, cl }; }
+      });
     }
-    if (pT.length && aiE.length) {
-      for (const { r, c, cl } of aiE) {
-        const dMoves = adj(r, c).filter(([nr, nc]) => s.bd[nr]?.[nc]?.ow === "player" && s.bd[nr][nc].fd);
-        if (dMoves.length) {
-          const [tr, tc] = dMoves[0]; const mEnt = s.bd[r][c]; s.bd[r][c] = null;
-          chkTraps(s, tr, tc, "ai"); s.bd[tr][tc] = mEnt; s.act--;
-          addLog(`Opp Defuse: ${cl.cd.name || "Entity"}`);
-          setGame({ ...s }); delay(); return;
-        }
+
+    // Evaluate Summons
+    let bestSum = null, bestSumScr = -999;
+    const handEnts = s.aH.filter(x => x.type === "entity");
+    if (handEnts.length) {
+      const card = handEnts[0];
+      for (let r = 0; r <= 1; r++) for (let c = 0; c < 5; c++) {
+        if (s.bd[r][c]) continue;
+        const scr = evalPos(r, c, card, false);
+        if (scr > bestSumScr) { bestSumScr = scr; bestSum = { r, c, card }; }
       }
     }
 
-    // 4. POSITIONING / TARGETED
-    const pE = [];
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cl = s.bd[r][c]; if (cl?.ow === "player" && cl.cd.type === "entity" && !cl.fd) pE.push({ r, c, cl });
-    }
-    if (aiE.length) {
-      for (const { r, c, cl } of aiE) {
-        const range = aura(cl.cd) === 0 ? 2 : 1;
-        const moves = adj(r, c).filter(([nr, nc]) => !s.bd[nr][nc] || s.bd[nr][nc]?.fd);
-        for (const [nr, nc] of moves) {
-          if (cl.summonedThisTurn && nr <= r) continue;
-          if (pE.some(p => {
-            const d = Math.abs(nr - p.r) + Math.abs(nc - p.c);
-            if (d > range) return false;
-            const aS = getEff(cl.cd, s.bd, nr, nc, cl.ib), dS = getEff(p.cl.cd, s.bd, p.r, p.c, p.cl.ib);
-            return STAT_DEFS.some(st => Math.abs(aS[st.key]) > Math.abs(dS[st.key]));
-          })) {
-            const mEnt = s.bd[r][c]; s.bd[r][c] = null; chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
-            addLog(`Opp Stalk: ${cl.cd.name || "Entity"}`);
-            setGame({ ...s }); delay(); return;
-          }
-        }
-      }
-      const ent = aiE[0]; const moves = adj(ent.r, ent.c).filter(([nr, nc]) => !s.bd[nr][nc] || s.bd[nr][nc]?.fd);
-      if (moves.length) {
-        const t = pE.length ? pE[0] : { r: 4, c: 2 };
-        let bestM = null, minD = 99;
-        for (const [nr, nc] of moves) {
-          if (ent.cl.summonedThisTurn && nr <= ent.r) continue;
-          const d = Math.abs(nr - t.r) + Math.abs(nc - t.c);
-          if (d < minD) { minD = d; bestM = [nr, nc]; }
-        }
-        if (bestM) {
-          const [nr, nc] = bestM; const mEnt = s.bd[ent.r][ent.c]; s.bd[ent.r][ent.c] = null;
-          chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
-          addLog(`Opp Advance: ${ent.cl.cd.name || "Entity"}`);
-          setGame({ ...s }); delay(); return;
-        }
-      }
+    // Decision
+    if (bestMove && (bestMoveScr > bestSumScr || !bestSum)) {
+      const { fr, fc, tr, tc, cl } = bestMove; s.bd[fr][fc] = null;
+      chkTraps(s, tr, tc, "ai"); s.bd[tr][tc] = cl; s.act--;
+      addLog(`Opp Move: ${cl.cd.name || "Entity"}`); setGame({ ...s }); delay(); return;
+    } else if (bestSum) {
+      const { r, c, card } = bestSum; s.aH.splice(s.aH.indexOf(card), 1);
+      s.bd[r][c] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true };
+      s.act--; playSfx("action"); enqF("SUMMON", { color: T.entity, border: TC[card.type] || T.entity, image: card.image, sub: card.name });
+      addLog(`Opp Summon: ${card.name || "Entity"}`); setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 1400); return;
     }
 
-
-    // AI economics: summon, draw, or SET trap
-    const cSum = s.aH.filter(x => x.type === "entity");
+    // Economy
     const trappable = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-
-    if (cSum.length) {
-      const emp = [];
-      // Prioritize row 1 (further forward) over row 0
-      for (let r = 1; r >= 0; r--) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
-      if (emp.length) {
-        const card = cSum[0]; s.aH.splice(s.aH.indexOf(card), 1);
-        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true };
-        playSfx("action");
-        s.act--; enqF("SUMMON", { color: T.entity, border: TC[card.type] || T.entity, image: card.image, sub: card.name });
-        addLog(`Opp Summon: ${card.name || "Entity"}`);
-        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 1400); return;
-      }
-    }
-    if (trappable.length && s.act >= 1 && Math.random() < 0.2) {
-      const emp = []; for (let r = 3; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
+    if (trappable.length && s.act >= 1) {
+      const emp = []; for (let r = 1; r <= 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
       if (emp.length) {
         const card = trappable[0]; s.aH.splice(s.aH.indexOf(card), 1);
-        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: true, prm: 1 };
-        playSfx("draw");
-        enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S" });
-        addLog(`Opp Set: Trap`);
-        setGame({ ...s }); delay(); return;
+        const [sr, sc] = emp[Math.floor(Math.random() * emp.length)]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: true, prm: 1 };
+        playSfx("draw"); enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S" });
+        addLog(`Opp Set: Trap`); setGame({ ...s }); delay(); return;
       }
     }
     if (s.aD.length) {
-      playSfx("draw");
-      s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
+      playSfx("draw"); s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
       addLog(`Opp Draw`); setGame({ ...s }); delay(1000); return;
     }
 
+    // End Turn
     g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player"); g.tn++;
-    if (g.pD.length) { 
-      g.pH = [...g.pH]; g.pD = [...g.pD]; 
-      g.pH.push(g.pD.shift()); 
-      playSfx("draw");
-    }
+    if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); playSfx("draw"); }
     chkPressure(g); setGame({ ...g }); setAiR(false);
   }
+
 
 
 
@@ -1458,7 +1466,7 @@ export default function Trinity() {
         {tab === "play" && !game && (
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Trinity</div>
-            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>SINGLE PLAYER</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>THE WAR IN HEAVEN</div>
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
               {[["GOOD", selDI, setSelDI, T.silverBright], ["EVIL", oppDI, setOppDI, T.curse]].map(([lb, sel, setSel, col], sideIdx) => {
                 const isEvil = sideIdx === 1;
@@ -1520,7 +1528,7 @@ export default function Trinity() {
         {tab === "duel" && !game && (
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Duel</div>
-            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>MULTIPLAYER HUB</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
             
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
               {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "player"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "ai"]].map(([lb, sel, setSel, col, role], sideIdx) => {
@@ -1622,7 +1630,7 @@ export default function Trinity() {
                         backgroundImage: !cell ? `linear-gradient(135deg,${zone},transparent)` : "none",
                         overflow: "hidden", padding: 1, height: "100%", width: "100%"
                       }}>
-                        {cell && <Card card={cell.cd} fill owner={cell.ow} sel={sel} fDown={cell.fd} noRar
+                        {cell && <Card card={cell.cd} fill owner={cell.ow} sel={sel} fDown={cell.fd} noRar viewerRole={mr}
                           effStats={cell.cd.type === "entity" && !cell.fd ? getEff(cell.cd, game.bd, r, c, cell.ib) : null} />}
                       </div>);
                   }))}
@@ -1671,32 +1679,41 @@ export default function Trinity() {
               {inspCell && game.bd[inspCell[0]]?.[inspCell[1]] && (() => {
                 const ic = game.bd[inspCell[0]][inspCell[1]];
                 const eff = ic.cd.type === "entity" ? getEff(ic.cd, game.bd, inspCell[0], inspCell[1], ic.ib) : null;
+                const mr = (mMode && mRole) || "player";
+                const isSecret = ic.fd && ic.ow !== mr;
+
                 return (
                   <div style={{ padding: 4, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, flexShrink: 0, animation: "fadeIn .2s" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ fontSize: 9, fontFamily: FONT_UI, fontWeight: 800, color: T.textBright }}>{ic.cd.name || ic.cd.type}</div>
+                      <div style={{ fontSize: 9, fontFamily: FONT_UI, fontWeight: 800, color: T.textBright }}>{isSecret ? "SECRET" : (ic.cd.name || ic.cd.type)}</div>
                       <button onClick={() => setInspCell(null)} style={{ background: "none", border: "none", color: T.textDim, cursor: "pointer", fontSize: 10 }}>x</button>
                     </div>
                     <div style={{ display: "flex", gap: 3, marginTop: 2, alignItems: "center" }}>
                       <div style={{
                         width: 36, height: 36, borderRadius: 3, border: `1px solid ${T.panelBorder}`, flexShrink: 0,
-                        background: ic.cd.image ? `url(${ic.cd.image}) center/cover` : T.card
-                      }} />
+                        background: isSecret ? T.card : (ic.cd.image ? `url(${ic.cd.image}) center/cover` : T.card)
+                      }}>
+                        {isSecret && <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontFamily: FONT_TITLE, color: T.silverDim, fontSize: 16 }}>T</div>}
+                      </div>
                       <div>
-                        <div style={{ fontSize: 7, color: TC[ic.cd.type], fontFamily: FONT_UI, textTransform: "uppercase", fontWeight: 800 }}>{ic.cd.type} ({ic.ow === ((mMode && mRole) || "player") ? "You" : "Opp"})</div>
-                        {eff && <div style={{ display: "flex", gap: 4, marginTop: 1 }}>
-                          {STAT_DEFS.map(s => {
-                            const v = eff[s.key]; return (
-                              <span key={s.key} style={{
-                                fontSize: 10, fontFamily: FONT_UI, fontWeight: 900,
-                                color: v > 0 ? s.color : v < 0 ? T.curse : T.textDim
-                              }}>{s.label}{v > 0 ? "+" : ""}{v}</span>);
-                          })}
-                        </div>}
-                        {(ic.cd.type === "blessing" || ic.cd.type === "curse") && <div style={{
-                          fontSize: 9, fontFamily: FONT_UI, fontWeight: 900,
-                          color: ic.cd.type === "blessing" ? T.bless : T.curse
-                        }}>{ic.cd.type === "blessing" ? "+" : "-"}{cPwr(ic.cd)}C {ic.fd ? "(TRAP)" : ""}</div>}
+                        <div style={{ fontSize: 7, color: isSecret ? T.textDim : TC[ic.cd.type], fontFamily: FONT_UI, textTransform: "uppercase", fontWeight: 800 }}>
+                          {isSecret ? "HIDDEN" : `${ic.cd.type} (${ic.ow === mr ? "You" : "Opp"})`}
+                        </div>
+                        {!isSecret && (<>
+                          {eff && <div style={{ display: "flex", gap: 4, marginTop: 1 }}>
+                            {STAT_DEFS.map(s => {
+                              const v = eff[s.key]; return (
+                                <span key={s.key} style={{
+                                  fontSize: 10, fontFamily: FONT_UI, fontWeight: 900,
+                                  color: v > 0 ? s.color : v < 0 ? T.curse : T.textDim
+                                }}>{s.label}{v > 0 ? "+" : ""}{v}</span>);
+                            })}
+                          </div>}
+                          {(ic.cd.type === "blessing" || ic.cd.type === "curse") && <div style={{
+                            fontSize: 9, fontFamily: FONT_UI, fontWeight: 900,
+                            color: ic.cd.type === "blessing" ? T.bless : T.curse
+                          }}>{ic.cd.type === "blessing" ? "+" : "-"}{cPwr(ic.cd)}C {ic.fd ? "(TRAP)" : ""}</div>}
+                        </>)}
                       </div>
                     </div>
                   </div>);
@@ -1715,7 +1732,7 @@ export default function Trinity() {
                 </div>)}
               {/* Log */}
               <div ref={logRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 4, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3 }}>
-                {log.map((m, i) => (<div key={i} style={{ color: m.includes("⚔") ? "#a06070" : m.includes("✦") || m.includes("⟐") ? T.silverBright : m.includes("⚡") ? T.curse : T.textDim, lineHeight: 1.3, fontSize: 10 }}>{m}</div>))}
+                {log.map((m, i) => (<div key={i} style={{ color: m.includes("⚔") ? "#a06070" : m.includes("✦") || m.includes("⟐") ? T.silverBright : m.includes("⚡") ? T.curse : m.includes("✧") ? T.bless : T.textDim, lineHeight: 1.3, fontSize: 10 }}>{m}</div>))}
               </div>
               {/* Controls — at bottom */}
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
@@ -2056,7 +2073,8 @@ export default function Trinity() {
                             return (<div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
                               <Card card={card} sz={100} dim={avail <= 0} onClick={() => {
                                 if (avail <= 0) return; const dk = decks[editDeck.idx];
-                                if (dk.cards.length >= DECK_SIZE || inDk >= MAX_COPIES) return;
+                                const terrainCount = dk.cards.map(id => gc(id, cardPool)).filter(c => c && c.type === "terrain").length;
+                                if (dk.cards.length >= DECK_SIZE || inDk >= MAX_COPIES || (card.type === "terrain" && terrainCount >= 2)) return;
                                 const u = [...decks]; u[editDeck.idx] = { ...dk, cards: [...dk.cards, card.id] }; setDecks(u);
                               }} />
                               <div style={{
