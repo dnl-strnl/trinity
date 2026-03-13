@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# start app from root dir: backend + frontend.
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Starting Trinity... ☘️"
@@ -9,12 +8,12 @@ echo "root: $DIR"
 # backend.
 cd "$DIR/backend"
 echo "<< backend on :4000"
+export TRINITY_AUDIO=1  # toggle game sound effects
 poetry run uvicorn server:app --reload --port 4000 &
 BACKEND_PID=$!
 
 sleep 1
 
-# frontend: vite.config.js, index.html, package.json, etc. at Trinity root.
 cd "$DIR"
 echo ">> frontend on :5173"
 npx vite &

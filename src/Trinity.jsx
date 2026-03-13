@@ -246,7 +246,7 @@ function Flash({ flash }) {
               }} />
           ) : null}
           <div style={{
-            width: 180, height: 180, borderRadius: 4,
+            width: 240, height: 240, borderRadius: 4,
             border: `2px solid ${flash.border || T.silver}44`,
             background: flash.image ? `url(${flash.image}) center/cover` : T.card,
             flexShrink: 0, display: hasVideo ? "none" : "flex", alignItems: "center", justifyContent: "center"
@@ -304,7 +304,18 @@ function CDisp({ value, label }) {
 // Main
 export default function Trinity() {
   const [tab, setTab] = useState("play");
-  const [cardPool, setCardPool] = useState([]);
+  const [cardPool, setCardPoolRaw] = useState([]);
+  const setCardPool = useCallback((val) => {
+    setCardPoolRaw(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      const seen = new Set();
+      return next.filter(c => {
+        if (seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
+    });
+  }, []);
   const [coll, setColl] = useState({});
   const [decks, setDecks] = useState([]);
   const [selDI, setSelDI] = useState(0); const [oppDI, setOppDI] = useState(1);
@@ -312,6 +323,31 @@ export default function Trinity() {
   const [dbR, setDbR] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tokens, setTokens] = useState(TOKENS_START);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [muted, setMuted] = useState(false);
+
+  const playSfx = useCallback((type) => {
+    if (!audioEnabled || muted) return;
+    
+    let url = "";
+    if (type === "summon" || type === "action") url = "/audio/action.mp3";
+    else if (type === "judgment") url = "/audio/play.mp3";
+    else if (type === "select") url = "/audio/select.mp3";
+    else if (type === "revenance") url = "/audio/revenance.mp3";
+    else if (type === "revenance-pos") url = "/audio/positive.mp3";
+    else if (type === "revenance-neg") url = "/audio/negative.mp3";
+    else if (type === "diffuse") url = "/audio/trap-diffuse.mp3";
+    else if (type.startsWith("battle-")) url = `/audio/${type}.mp3`;
+    else if (type === "draw") {
+      const idx = Math.floor(Math.random() * 2) + 1;
+      url = `/audio/draw-${idx}.mp3`;
+    }
+    if (url) {
+      const a = new Audio(url);
+      a.volume = 0.4;
+      a.play().catch(() => {});
+    }
+  }, [audioEnabled, muted]);
 
   const [flash, setFlash] = useState(null); const fQ = useRef([]); const fB = useRef(false);
   const enqF = useCallback((text, opts = {}) => { fQ.current.push({ text, ...opts }); if (!fB.current) drF(); }, []);
@@ -362,6 +398,106 @@ export default function Trinity() {
     rarCommon: 64, rarUncommon: 24, rarRare: 8, rarLegendary: 4,
   });
 
+  // ═══ MULTIPLAYER STATE ═══
+  const [mMode, setMMode] = useState(false);
+  const [mRole, setMRole] = useState(null); // "player", "ai", or "spectator"
+  const [mTaken, setMTaken] = useState([]);
+  const [mOppDeck, setMOppDeck] = useState(null);
+  const [mWait, setMWait] = useState(false);
+  const ws = useRef(null);
+  const mRoleRef = useRef(null);
+
+  useEffect(() => {
+    let socket = null;
+    let reconnectTimer = null;
+    let attempt = 0;
+    let disposed = false; // Prevents reconnect after StrictMode cleanup
+
+    function connect() {
+      if (disposed) return;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.hostname || "localhost";
+      const wsUrl = `${protocol}//${host}:4000/game-ws`;
+      console.log("[Multiplayer] Connecting to:", wsUrl, "(attempt", attempt + 1, ")");
+      
+      socket = new WebSocket(wsUrl);
+      ws.current = socket;
+
+      socket.onopen = () => {
+        console.log("[Multiplayer] Connected!");
+        attempt = 0;
+        socket.send(JSON.stringify({ type: "join" }));
+      };
+
+      socket.onerror = (e) => {
+        console.error("[Multiplayer] WebSocket Error:", e);
+      };
+
+      socket.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "welcome") {
+          console.log("[Multiplayer] Welcome! Role:", msg.role);
+          mRoleRef.current = msg.role;
+          setMRole(msg.role);
+          setMTaken(msg.taken);
+          if (msg.state) setGame(msg.state);
+        } else if (msg.type === "room_update") {
+          setMTaken(msg.taken);
+        } else if (msg.type === "deck_selected") {
+          if (msg.role !== mRoleRef.current) {
+            setMOppDeck(msg.deck_name);
+          }
+        } else if (msg.type === "ready_to_start") {
+          setMWait(false);
+        } else if (msg.type === "game_start") {
+          setGame(msg.state);
+          setMMode(true);
+          setMWait(false);
+          setTab("duel");
+          enqF("BATTLE START", { color: T.silverBright, icon: "\u2694" });
+        } else if (msg.type === "state_update") {
+          setGame(msg.state);
+        } else if (msg.type === "game_reset") {
+          setGame(null);
+          setMMode(false);
+          setMOppDeck(null);
+          setMWait(false);
+        }
+      };
+
+      socket.onclose = (e) => {
+        console.log("[Multiplayer] Connection closed:", e.code, e.reason);
+        if (!disposed) {
+          // Auto-reconnect with backoff (max 10s)
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+          attempt++;
+          console.log("[Multiplayer] Reconnecting in", delay, "ms...");
+          reconnectTimer = setTimeout(connect, delay);
+        }
+      };
+    }
+
+    connect();
+
+    return () => {
+      console.log("[Multiplayer] Cleaning up WebSocket");
+      disposed = true; // Stop any further reconnections
+      clearTimeout(reconnectTimer);
+      if (socket) socket.close();
+    };
+  }, []); // Run only ONCE on mount
+
+  const syncState = useCallback((nextGame) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: "sync_state", state: nextGame }));
+    }
+  }, []);
+
+  const updateGame = useCallback((next) => {
+    setGame(next);
+    if (mMode) syncState(next);
+  }, [mMode, syncState]);
+
   // Live preview — deterministic sample that updates as sliders change
   const livePreview = useMemo(() => {
     const { total, pctEntity, pctBless, pctCurse, pctTerrain, pctItem,
@@ -397,7 +533,13 @@ export default function Trinity() {
         else if (type === "blessing") { pwr = blessPwrMin + Math.floor(sR() * (blessPwrMax - blessPwrMin + 1)); }
         else if (type === "curse") { pwr = cursePwrMin + Math.floor(sR() * (cursePwrMax - cursePwrMin + 1)); }
         else if (type === "terrain") { const v = [0, 0, 0]; v[Math.floor(sR() * 3)] = sR() > .5 ? 1 : -1; v[(Math.floor(sR() * 3) + 1) % 3] = sR() > .5 ? 1 : -1; s = v[0]; m = v[1]; w = v[2]; }
-        else if (type === "equip") { const v = [0, 0, 0]; v[Math.floor(sR() * 3)] = 1 + Math.floor(sR() * 2); s = v[0]; m = v[1]; w = v[2]; }
+        else if (type === "equip") { 
+          const v = [0, 0, 0]; 
+          const mag = 1 + Math.floor(sR() * 3); 
+          const sign = sR() > 0.5 ? 1 : -1;
+          v[Math.floor(sR() * 3)] = mag * sign; 
+          s = v[0]; m = v[1]; w = v[2]; 
+        }
         rows.push({ type, soul: s, mind: m, will: w, rarity: "common", power: pwr, id: i });
       }
     }
@@ -441,6 +583,16 @@ export default function Trinity() {
     });
 
     rows.forEach(card => { if (!assignedIds.has(card.id)) card.rarity = "common"; });
+
+    const countsMap = new Map();
+    rows.forEach(r => {
+      const k = `${r.type}|${r.soul}|${r.mind}|${r.will}|${r.power}`;
+      countsMap.set(k, (countsMap.get(k) || 0) + 1);
+    });
+    rows.forEach(r => {
+      r.isUnique = countsMap.get(`${r.type}|${r.soul}|${r.mind}|${r.will}|${r.power}`) === 1;
+    });
+
     return rows;
   }, [gen, genMode]);
 
@@ -471,6 +623,7 @@ export default function Trinity() {
           if (s.collection) setColl(s.collection);
           if (s.sets) setSets(s.sets);
           if (s.tokens !== undefined) setTokens(s.tokens);
+          if (s.audio_enabled !== undefined) setAudioEnabled(s.audio_enabled);
           console.log(`[Trinity] Loaded state from backend`);
         } else { console.warn("[Trinity] Backend returned", r.status); }
       } catch (e) { console.warn("[Trinity] Backend not reachable:", e.message); }
@@ -516,12 +669,34 @@ export default function Trinity() {
     input[type=range]{height:3px}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#a8a8b8;cursor:pointer}
   `; document.head.appendChild(s); return () => document.head.removeChild(s);
   }, []);
+  
+  const handleKeys = useCallback((e) => {
+    if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+    if (tab !== "play" || !game || game.ph !== "playing" || aiR) return;
+
+    // In multiplayer, only the active player can use shortcuts
+    if (mMode && game.turn !== mRole) return;
+    if (!mMode && game.turn !== "player") return;
+
+    const k = e.key.toLowerCase();
+    if (k === "d") { drawCard(); }
+    else if (k === "e") { endTurn(); }
+    else if (k === "f") { forfeit(); }
+    else if (k === "p") { setShowPit(p => !p); }
+    else if (k === "escape" || k === "c") { clr(); }
+    else if (k === "s") { if (mode === "blessing" || mode === "curse") doSetTrap(); }
+  }, [tab, game, aiR, drawCard, endTurn, forfeit, mode, clr, doSetTrap, mMode, mRole]);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeys);
+    return () => window.removeEventListener("keydown", handleKeys);
+  }, [handleKeys]);
 
   // Game engine — ownership-aware C shift helper
   // Winner pushes C toward their own win condition.
   // Player light: player wins push +C, AI wins push -C
   // Player dark: player wins push -C, AI wins push +C
-  function combatC(g, dmg, winningStat, winnerOwner, battleOpts, atkCard, defCard, atkWon, logPrefix) {
+  function combatC(g, dmg, winningStat, winnerOwner, battleOpts, atkCard, defCard, atkWon, logPrefix, statKey) {
     const playerDir = g.pRole === "light" ? 1 : -1;
     const cShift = dmg * (winnerOwner === "player" ? playerDir : -playerDir);
 
@@ -529,8 +704,18 @@ export default function Trinity() {
     const label = cShift > 0 ? `+${absShift}C` : `−${absShift}C`;
     const color = cShift > 0 ? T.bless : T.curse;
 
+    const prevC = g.c;
+    const nextC = Math.max(-C_MAX, Math.min(C_MAX, prevC + cShift));
+    const crossedZero = (prevC > 0 && nextC < 0) || (prevC < 0 && nextC > 0) || (prevC !== 0 && nextC === 0);
+
+    if (crossedZero) {
+      playSfx(cShift > 0 ? "revenance-pos" : "revenance-neg");
+    } else if (statKey) {
+      playSfx(`battle-${statKey[0]}`);
+    }
+
     enqF(label, { color, border: color, icon: cShift > 0 ? "A" : "C", iconFont: FONT_TITLE, ...battleOpts, atkWon });
-    applyC(g, cShift);
+    applyC(g, cShift, true); // true to skip internal revenance sound
     addLog(`${logPrefix} (${label} Meter)`);
   }
 
@@ -540,17 +725,20 @@ export default function Trinity() {
     if (aV > dV) return { winner: "attacker", dmg: aV - dV, winningStat: aS[stat] };
     return { winner: "defender", dmg: dV - aV, winningStat: dS[stat] };
   }
-  function applyC(g, amt) {
+  function applyC(g, amt, skipSfx) {
     const prev = g.c;
     const next = Math.max(-C_MAX, Math.min(C_MAX, prev + amt));
     g.c = next;
 
     const crossedZero = (prev > 0 && next < 0) || (prev < 0 && next > 0) || (prev !== 0 && next === 0);
-    if (crossedZero) {
+    if (crossedZero && !skipSfx) {
+      playSfx("revenance");
       if (amt < 0 && g.pD.length && g.pRole === "light") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
       else if (amt > 0 && g.aD.length && g.pRole === "light") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
       else if (amt > 0 && g.pD.length && g.pRole === "dark") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
       else if (amt < 0 && g.aD.length && g.pRole === "dark") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
+      // Slow down the sequence slightly when these trigger
+      if (fB.current) fB.current = true; // Wait for flash
     }
 
     // Victory Conditions
@@ -580,6 +768,7 @@ export default function Trinity() {
     // Handle Defusal: If the mover LANDED on an opponent's trap
     const landCell = g.bd[r][c];
     if (landCell && landCell.fd && landCell.ow === opp && (landCell.cd.type === "blessing" || landCell.cd.type === "curse")) {
+        playSfx("diffuse");
         enqF("TRAP DEFUSED", { color: T.textDim, border: T.silverDim, icon: "⊘", sub: `Opp ${landCell.cd.name || "Trap"}` });
         addLog(`⊘ Trap Defused: ${landCell.cd.name || "Trap"}`);
         toPit(landCell.cd, opp);
@@ -593,8 +782,9 @@ export default function Trinity() {
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
         const cl = g.bd[r][c];
-        if (cl?.ow === ow && cl.fd && cl.prm > 0) {
-          cl.prm--;
+        if (cl?.ow === ow) {
+          if (cl.fd && cl.prm > 0) cl.prm--;
+          if (cl.summonedThisTurn) delete cl.summonedThisTurn;
         }
       }
     }
@@ -624,6 +814,7 @@ export default function Trinity() {
   }
 
   function startGame() {
+    playSfx("judgment");
     const pIds = decks[selDI]?.cards || []; const aIds = decks[oppDI]?.cards || [];
     const pD = shuffle(pIds.map(id => gc(id, cardPool)).filter(Boolean));
     const aD = shuffle(aIds.map(id => gc(id, cardPool)).filter(Boolean));
@@ -636,29 +827,70 @@ export default function Trinity() {
       pH: pD.splice(0, HAND_SIZE), aH: aD.splice(0, HAND_SIZE),
       pD, aD, c: 0, turn, act: 3, tn: 1, ph: "playing", win: null, pRole, flips: 0
     };
-    setGame(startG);
-    setPit({ player: [], ai: [] }); clr(); setLog([`0C. ${turn === "player" ? "Your" : "Opponent"} turn.`]);
-    if (turn === "ai") {
-      setAiR(true);
-      setTimeout(() => runAI(startG, 0), 1000);
+
+    if (tab === "duel") {
+      ws.current.send(JSON.stringify({ type: "start_game", state: startG }));
+    } else {
+      setGame(startG);
+      setMMode(false); // Ensure mMode is false for local play
+      setPit({ player: [], ai: [] }); clr(); setLog([`0C. ${turn === "player" ? "Your" : "Opponent"} turn.`]);
+      if (turn === "ai") {
+        setAiR(true);
+        setTimeout(() => runAI(startG, 0), 1000);
+      }
+      enqF("Genesis", { color: T.silverBright, border: T.silver, icon: "G" });
     }
-    enqF("Genesis", { color: T.silverBright, border: T.silver, icon: "G" });
   }
+
+  // Helper check for "is it my turn?"
+  const isMyTurn = useCallback(() => {
+    if (!game || game.ph !== "playing") return false;
+    const mr = (mMode && mRole) || "player";
+    return game.turn === mr;
+  }, [game, mMode, mRole]);
   function clr() { setSelH(null); setSelB(null); setHl([]); setMode(null); setTapTgt(null); setInspCell(null); }
-  function forfeit() { setGame(null); setLog([]); setAiR(false); setPit({ player: [], ai: [] }); setRecentPit([]); setInspCell(null); }
+  function forfeit() { 
+    if (mMode) {
+      ws.current.send(JSON.stringify({ type: "reset" }));
+    }
+    setGame(null); setLog([]); setAiR(false); setPit({ player: [], ai: [] }); setRecentPit([]); setInspCell(null); setMMode(false);
+  }
 
   function drawCard() {
-    if (!game || game.ph !== "playing" || game.turn !== "player" || game.act <= 0 || !game.pD.length) return;
-    const g = { ...game, pD: [...game.pD], pH: [...game.pH] };
-    const c = g.pD.shift(); g.pH.push(c); g.act--;
+    if (!game || game.ph !== "playing" || !isMyTurn() || game.act <= 0) return;
+    const mr = (mMode && mRole) || "player";
+    const mdk = mr === "player" ? "pD" : "aD";
+    const mhk = mr === "player" ? "pH" : "aH";
+    const deck = game[mdk];
+    if (!deck.length) return;
+
+    playSfx("draw");
+    const g = { ...game, 
+      [mdk]: [...game[mdk]], 
+      [mhk]: [...game[mhk]],
+      act: game.act - 1
+    };
+    
+    const c = g[mdk].shift(); g[mhk].push(c);
     enqF("DRAW", { color: T.silver, border: T.silverDim, image: c.image, sub: c.name || "Card" });
     addLog(`Draw: ${c.name || "Card"}`);
-    setGame(g); clr();
+    
+    updateGame(g); clr();
   }
   function selectHand(idx) {
-    if (!game || game.turn !== "player" || game.act <= 0 || game.ph !== "playing") return;
-    const c = game.pH[idx]; setSelH(idx); setSelB(null);
-    if (c.type === "entity") { const cells = []; for (let r = 3; r < 5; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]); setHl(cells); setMode("summon"); }
+    const mr = (mMode && mRole) || "player";
+    if (!game || game.turn !== mr || game.act <= 0 || game.ph !== "playing") return;
+    const mhk = mr === "player" ? "pH" : "aH";
+    const c = game[mhk][idx]; setSelH(idx); setSelB(null);
+    if (c.type === "entity") { 
+      const cells = []; 
+      if (mr === "player") {
+        for (let r = 3; r < 5; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]); 
+      } else {
+        for (let r = 0; r < 2; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]); 
+      }
+      setHl(cells); setMode("summon"); 
+    }
     else if (c.type === "blessing" || c.type === "curse") { setHl([]); setMode(c.type); }
     else if (c.type === "terrain") {
       if (game.act < 2) return;
@@ -668,56 +900,77 @@ export default function Trinity() {
       }
       setHl(cells); setMode("terrain");
     }
-    else if (c.type === "equip") { const cells = []; for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) { const cl = game.bd[r][col]; if (cl?.ow === "player" && cl.cd.type === "entity") cells.push([r, col]); } setHl(cells); setMode("equip"); }
+    else if (c.type === "equip") { 
+      const cells = []; 
+      for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) { 
+        const cl = game.bd[r][col]; 
+        if (cl?.ow === mr && cl.cd.type === "entity") cells.push([r, col]); 
+      } 
+      setHl(cells); setMode("equip"); 
+    }
   }
   function playBC(type) {
-    if (!game || selH === null) return; const c = game.pH[selH]; const cost = game.c === 0 ? 0 : 1;
-    if (game.act < cost) return; const g = { ...game, pH: [...game.pH], bd: game.bd.map(r => [...r]) };
-    g.pH.splice(selH, 1); g.act -= cost;
+    if (!game || selH === null) return; 
+    const mr = (mMode && mRole) || "player";
+    const mhk = mr === "player" ? "pH" : "aH";
+    const c = game[mhk][selH]; const cost = game.c === 0 ? 0 : 1;
+    if (game.act < cost) return; 
+    const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(r => [...r]) };
+    g[mhk].splice(selH, 1); g.act -= cost;
+    playSfx("action");
     const pwr = cPwr(c);
     if (type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: c.image, video: c.video }); applyC(g, pwr); addLog(`Play: ${c.name || "Blessing"} (+${pwr}C)`); }
     else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: c.image, video: c.video }); applyC(g, -pwr); addLog(`Play: ${c.name || "Curse"} (−${pwr}C)`); }
-    toPit(c, "player"); setGame(g); clr();
+    toPit(c, mr); updateGame(g); clr();
   }
   function doSetTrap() {
     if (!game || selH === null) return;
     const cells = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!game.bd[r][c]) cells.push([r, c]);
     setHl(cells); setMode("setTrap");
   }
-  function boardClick(r, c) {
-    if (!game || game.turn !== "player" || game.ph !== "playing" || aiR) return;
+  function boardClick(vr, vc) {
+    const mr = (mMode && mRole) || "player";
+    const or = mr === "player" ? "ai" : "player";
+    const r = (mr === "ai") ? 4 - vr : vr;
+    const c = (mr === "ai") ? 4 - vc : vc;
+    
+    if (!game || game.turn !== mr || game.ph !== "playing" || (mr === "player" && aiR)) return;
+    const mhk = mr === "player" ? "pH" : "aH";
     const isH = hl.some(([hr, hc]) => hr === r && hc === c);
     const cell = game.bd[r][c];
 
     if (mode === "setTrap" && selH !== null && isH) {
-      const g = { ...game, pH: [...game.pH], bd: game.bd.map(row => [...row]) };
-      const card = g.pH.splice(selH, 1)[0];
-      g.bd[r][c] = { cd: card, ow: "player", fd: true, prm: 1 };
+      const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
+      const card = g[mhk].splice(selH, 1)[0];
+      g.bd[r][c] = { cd: card, ow: mr, fd: true, prm: 1 };
+      playSfx("draw");
       enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "▼", image: card.image });
       addLog(`Set: Trap`);
-      setGame(g); clr(); return;
+      updateGame(g); clr(); return;
     }
     if ((mode === "summon" || mode === "terrain") && selH !== null && isH) {
       const cost = mode === "terrain" ? 2 : 1;
       if (game.act < cost) return;
-      const g = { ...game, pH: [...game.pH], bd: game.bd.map(row => [...row]) };
-      const card = g.pH.splice(selH, 1)[0];
-      g.bd[r][c] = { cd: card, ow: "player", fd: false, ib: { soul: 0, mind: 0, will: 0 } }; g.act -= cost;
+      playSfx("action");
+      const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
+      const card = g[mhk].splice(selH, 1)[0];
+      g.bd[r][c] = { cd: card, ow: mr, fd: false, ib: { soul: 0, mind: 0, will: 0 } }; g.act -= cost;
       enqF(mode === "summon" ? "SUMMON" : "TERRAIN", { color: T.silver, border: TC[card.type], image: card.image, video: card.video, sub: card.name });
       addLog(`${mode === "summon" ? "Summon" : "Terrain"}: ${card.name || card.type}`);
-      setGame(g); clr(); return;
+      updateGame(g); clr(); return;
     }
     if (mode === "equip" && selH !== null && isH) {
-      const g = { ...game, pH: [...game.pH], bd: game.bd.map(row => [...row]) };
-      const item = g.pH.splice(selH, 1)[0]; const cell = { ...g.bd[r][c] };
-      STAT_DEFS.forEach(s => { cell.ib[s.key] = (cell.ib?.[s.key] || 0) + (item[s.key] || 0); });
-      g.bd[r][c] = cell; g.act--;
+      const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
+      const item = g[mhk].splice(selH, 1)[0]; const ncell = { ...g.bd[r][c] };
+      playSfx("action");
+      STAT_DEFS.forEach(s => { ncell.ib[s.key] = (ncell.ib?.[s.key] || 0) + (item[s.key] || 0); });
+      g.bd[r][c] = ncell; g.act--;
       enqF("EQUIP", { color: T.item, border: T.item, icon: "⊕", image: item.image });
       addLog(`Equip: ${item.name || item.type}`);
-      toPit(item, "player");
-      setGame(g); clr(); return;
+      toPit(item, mr);
+      updateGame(g); clr(); return;
     }
-    if (cell?.ow === "player" && cell.fd && !mode) {
+    if (cell?.ow === mr && cell.fd && !mode) {
       if (game.flips >= 2) { addLog("Max 2 flips per turn reached."); return; }
       const cost = game.flips === 0 ? 1 : 0;
       if (game.act < cost) { addLog("Need 1 action for first flip."); return; }
@@ -726,18 +979,19 @@ export default function Trinity() {
       const ready = (cell.prm || 0) <= 0;
       if (!ready) { addLog(`Wait. Trap still priming... (${cell.prm} left)`); return; }
 
+      playSfx("action");
       const g = { ...game, bd: game.bd.map(row => [...row]), flips: game.flips + 1, act: game.act - cost };
       const isB = cell.cd.type === "blessing";
       if (isB) { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: cell.cd.image, video: cell.cd.video }); applyC(g, pwr); addLog(`Trigger: ${cell.cd.name || "Blessing"} (+${pwr}C)`); }
       else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: cell.cd.image, video: cell.cd.video }); applyC(g, -pwr); addLog(`Trigger: ${cell.cd.name || "Curse"} (−${pwr}C)`); }
-      toPit(cell.cd, "player"); g.bd[r][c] = null;
-      setGame(g); clr(); return;
+      toPit(cell.cd, mr); g.bd[r][c] = null;
+      updateGame(g); clr(); return;
     }
 
-    if (cell?.ow === "player" && cell.cd.type === "entity" && !cell.fd && mode !== "chooseStat") {
+    if (cell?.ow === mr && cell.cd.type === "entity" && !cell.fd && mode !== "chooseStat") {
       setSelB([r, c]); setSelH(null); setInspCell([r, c]); const isT = aura(cell.cd) === 0;
       const a = adj(r, c, isT ? 2 : 1);
-      setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === "ai" && t.cd.type === "entity" && !t.fd; })]);
+      setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === or && t.cd.type === "entity" && !t.fd; })]);
       setMode("moveOrTap"); return;
     }
     // Inspect: click any occupied cell when no mode is active
@@ -750,38 +1004,57 @@ export default function Trinity() {
         const g = { ...game, bd: game.bd.map(row => [...row]) };
         const movingEnt = g.bd[sr][sc];
         g.bd[sr][sc] = null;
-        chkTraps(g, r, c, "player");
+        chkTraps(g, r, c, mr);
         g.bd[r][c] = movingEnt;
-        g.act--; setGame(g); clr();
+        g.act--; updateGame(g); clr();
       }
-      else if (game.bd[r][c]?.ow === "ai") { if (game.act <= 0) return; setTapTgt([r, c]); setMode("chooseStat"); setHl([]); }
+      else if (game.bd[r][c]?.ow === or) { if (game.act <= 0) return; setTapTgt([r, c]); setMode("chooseStat"); setHl([]); }
     }
   }
   function resolveTap(stat) {
     if (!game || !selB || !tapTgt) return; const [ar, ac] = selB; const [dr, dc] = tapTgt;
     const atk = game.bd[ar][ac]; const def = game.bd[dr][dc]; if (!atk || !def) return;
     const aS = getEff(atk.cd, game.bd, ar, ac, atk.ib); const dS = getEff(def.cd, game.bd, dr, dc, def.ib);
-    const result = resolveCombat(aS, dS, stat); const g = { ...game, bd: game.bd.map(row => [...row]) }; g.act--;
+    const result = resolveCombat(aS, dS, stat); 
+    const g = { ...game, bd: game.bd.map(row => [...row]) }; g.act--;
     const battleOpts = { atkCard: atk.cd, defCard: def.cd, sub: `${stat.toUpperCase()} |${aS[stat]}| vs |${dS[stat]}|` };
     const aVal = Math.abs(aS[stat]); const dVal = Math.abs(dS[stat]);
     if (result.winner === "attacker") {
       // Player's entity won — ownerFactor = +1 (player)
       g.bd[dr][dc] = null; toPit(def.cd, "ai");
       combatC(g, result.dmg, result.winningStat, "player", battleOpts, atk.cd, def.cd, true,
-        `⚔ ${atk.cd.name || "Atk"} |${aVal}| > ${def.cd.name || "Def"} |${dVal}|`);
+        `⚔ ${atk.cd.name || "Atk"} |${aVal}| > ${def.cd.name || "Def"} |${dVal}|`, stat);
     } else if (result.winner === "defender") {
       // AI's entity won — ownerFactor = -1 (ai)
       g.bd[ar][ac] = null; toPit(atk.cd, "player");
       combatC(g, result.dmg, result.winningStat, "ai", battleOpts, atk.cd, def.cd, false,
-        `⚔ ${atk.cd.name || "Atk"} |${aVal}| < ${def.cd.name || "Def"} |${dVal}|`);
-    } else { enqF("TIE", { color: T.textDim, border: T.textDim, ...battleOpts }); addLog(`⚔ ${atk.cd.name || "Atk"} |${aVal}| = ${def.cd.name || "Def"} |${dVal}| (Tie)`); }
-    setGame(g); clr();
+        `⚔ ${atk.cd.name || "Atk"} |${aVal}| < ${def.cd.name || "Def"} |${dVal}|`, stat);
+    } else { 
+      playSfx(`battle-${stat[0]}`);
+      enqF("TIE", { color: T.textDim, border: T.textDim, ...battleOpts }); 
+      addLog(`⚔ ${atk.cd.name || "Atk"} |${aVal}| = ${def.cd.name || "Def"} |${dVal}| (Tie)`); 
+    }
+    updateGame(g); clr();
   }
   function endTurn() {
-    if (!game || game.turn !== "player" || aiR) return;
-    const g = { ...game, bd: game.bd.map(r => [...r]), aH: [...game.aH], aD: [...game.aD] };
-    g.turn = "ai"; g.act = 3; g.flips = 0; if (g.aD.length) g.aH.push(g.aD.shift()); flipSets(g, "ai"); g.tn++;
-    setGame(g); clr(); addLog("— Opp —"); setAiR(true); setTimeout(() => runAI(g, 0), 500 + Math.random() * 1500);
+    if (!game || !isMyTurn() || aiR) return;
+    const g = { ...game, bd: game.bd.map(r => [...r]), aH: [...game.aH], aD: [...game.aD], pH: [...game.pH], pD: [...game.pD] };
+    const nextTurn = game.turn === "player" ? "ai" : "player";
+    
+    g.turn = nextTurn; g.act = 3; g.flips = 0; 
+    
+    // Auto-draw for next player (logic shared for now)
+    const nextDeck = nextTurn === "player" ? g.pD : g.aD;
+    const nextHand = nextTurn === "player" ? g.pH : g.aH;
+    if (nextDeck.length) { nextHand.push(nextDeck.shift()); playSfx("draw"); }
+    
+    flipSets(g, nextTurn); g.tn++;
+    
+    if (mMode) {
+      updateGame(g); clr(); addLog(`— ${nextTurn === mRole ? "Your" : "Opp"} Turn —`);
+    } else {
+      setGame(g); clr(); addLog("— Opp —"); setAiR(true); setTimeout(() => runAI(g, 0), 500 + Math.random() * 1500);
+    }
   }
 
   function runAI(g, idx) {
@@ -800,16 +1073,19 @@ export default function Trinity() {
       return false;
     };
 
+    const delay = (ms = 1200) => setTimeout(() => runAI(s, idx + 1), ms);
+
     // 1. LETHAL METER CHECK (Hand & Primed Traps)
     const handSpells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
     for (const sp of handSpells) {
       const v = sp.type === "blessing" ? cPwr(sp) : -cPwr(sp);
       if (checkLethal(v)) {
         s.aH.splice(s.aH.indexOf(sp), 1); s.act--;
+        playSfx("action");
         if (sp.type === "blessing") { enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image }); applyC(s, cPwr(sp)); }
         else { enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image }); applyC(s, -cPwr(sp)); }
         toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`);
-        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+        setGame({ ...s }); delay(); return;
       }
     }
     if (s.flips < 2) {
@@ -820,11 +1096,12 @@ export default function Trinity() {
           if (cl?.ow === "ai" && cl.fd && (cl.prm || 0) <= 0) {
             const v = cl.cd.type === "blessing" ? cPwr(cl.cd) : -cPwr(cl.cd);
             if (checkLethal(v)) {
+              playSfx("action");
               if (cl.cd.type === "blessing") { enqF(`+${Math.abs(v)}C`, { color: T.bless, border: T.bless, icon: "△", image: cl.cd.image }); applyC(s, Math.abs(v)); }
               else { enqF(`−${Math.abs(v)}C`, { color: T.curse, border: T.curse, icon: "▽", image: cl.cd.image }); applyC(s, -Math.abs(v)); }
               toPit(cl.cd, "ai"); s.bd[r][c] = null; s.flips++; s.act -= cost;
               addLog(`Opp LETHAL Trap: ${cl.cd.name || "Trap"}`);
-              setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+              setGame({ ...s }); delay(); return;
             }
           }
         }
@@ -853,8 +1130,8 @@ export default function Trinity() {
       const { tr, tc, stat, cl, tg, aS, dS, res } = bestAtk;
       const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${stat.toUpperCase()} |${aS[stat]}| vs |${dS[stat]}|` };
       s.bd[tr][tc] = null; toPit(tg.cd, "player"); s.act--;
-      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ Opp ${cl.cd.name || "Atk"} |${Math.abs(aS[stat])}| > ${tg.cd.name || "Def"}`);
-      setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ Opp ${cl.cd.name || "Atk"} |${Math.abs(aS[stat])}| > ${tg.cd.name || "Def"}`, stat);
+      setGame({ ...s }); delay(1600); return;
     }
 
     // 3. DEFUSAL AGGRESSION
@@ -871,7 +1148,7 @@ export default function Trinity() {
           const [tr, tc] = dMoves[0]; const mEnt = s.bd[r][c]; s.bd[r][c] = null;
           chkTraps(s, tr, tc, "ai"); s.bd[tr][tc] = mEnt; s.act--;
           addLog(`Opp Defuse: ${cl.cd.name || "Entity"}`);
-          setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+          setGame({ ...s }); delay(); return;
         }
       }
     }
@@ -886,6 +1163,7 @@ export default function Trinity() {
         const range = aura(cl.cd) === 0 ? 2 : 1;
         const moves = adj(r, c).filter(([nr, nc]) => !s.bd[nr][nc] || s.bd[nr][nc]?.fd);
         for (const [nr, nc] of moves) {
+          if (cl.summonedThisTurn && nr <= r) continue;
           if (pE.some(p => {
             const d = Math.abs(nr - p.r) + Math.abs(nc - p.c);
             if (d > range) return false;
@@ -894,7 +1172,7 @@ export default function Trinity() {
           })) {
             const mEnt = s.bd[r][c]; s.bd[r][c] = null; chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
             addLog(`Opp Stalk: ${cl.cd.name || "Entity"}`);
-            setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+            setGame({ ...s }); delay(); return;
           }
         }
       }
@@ -903,6 +1181,7 @@ export default function Trinity() {
         const t = pE.length ? pE[0] : { r: 4, c: 2 };
         let bestM = null, minD = 99;
         for (const [nr, nc] of moves) {
+          if (ent.cl.summonedThisTurn && nr <= ent.r) continue;
           const d = Math.abs(nr - t.r) + Math.abs(nc - t.c);
           if (d < minD) { minD = d; bestM = [nr, nc]; }
         }
@@ -910,7 +1189,7 @@ export default function Trinity() {
           const [nr, nc] = bestM; const mEnt = s.bd[ent.r][ent.c]; s.bd[ent.r][ent.c] = null;
           chkTraps(s, nr, nc, "ai"); s.bd[nr][nc] = mEnt; s.act--;
           addLog(`Opp Advance: ${ent.cl.cd.name || "Entity"}`);
-          setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+          setGame({ ...s }); delay(); return;
         }
       }
     }
@@ -921,13 +1200,16 @@ export default function Trinity() {
     const trappable = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
 
     if (cSum.length) {
-      const emp = []; for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
+      const emp = [];
+      // Prioritize row 1 (further forward) over row 0
+      for (let r = 1; r >= 0; r--) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
       if (emp.length) {
         const card = cSum[0]; s.aH.splice(s.aH.indexOf(card), 1);
-        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } };
-        s.act--; enqF("SUMMON", { color: T.entity, border: T.entity, image: card.image });
+        const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true };
+        playSfx("action");
+        s.act--; enqF("SUMMON", { color: T.entity, border: TC[card.type] || T.entity, image: card.image, sub: card.name });
         addLog(`Opp Summon: ${card.name || "Entity"}`);
-        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 1400); return;
       }
     }
     if (trappable.length && s.act >= 1 && Math.random() < 0.2) {
@@ -935,18 +1217,24 @@ export default function Trinity() {
       if (emp.length) {
         const card = trappable[0]; s.aH.splice(s.aH.indexOf(card), 1);
         const [sr, sc] = emp[0]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: true, prm: 1 };
+        playSfx("draw");
         enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S" });
         addLog(`Opp Set: Trap`);
-        setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 800); return;
+        setGame({ ...s }); delay(); return;
       }
     }
     if (s.aD.length) {
+      playSfx("draw");
       s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
-      addLog(`Opp Draw`); setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 600); return;
+      addLog(`Opp Draw`); setGame({ ...s }); delay(1000); return;
     }
 
     g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player"); g.tn++;
-    if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); }
+    if (g.pD.length) { 
+      g.pH = [...g.pH]; g.pD = [...g.pD]; 
+      g.pH.push(g.pD.shift()); 
+      playSfx("draw");
+    }
     chkPressure(g); setGame({ ...g }); setAiR(false);
   }
 
@@ -1049,9 +1337,15 @@ export default function Trinity() {
         else if (type === "blessing") { stats = { soul: 0, mind: 0, will: 0 }; pwr = rPwr(blessPwrMin, blessPwrMax); }
         else if (type === "curse") { stats = { soul: 0, mind: 0, will: 0 }; pwr = rPwr(cursePwrMin, cursePwrMax); }
         else if (type === "terrain") { const v = [0, 0, 0]; v[Math.floor(Math.random() * 3)] = Math.random() > .5 ? 1 : -1; v[(Math.floor(Math.random() * 3) + 1) % 3] = Math.random() > .5 ? 1 : -1; stats = { soul: v[0], mind: v[1], will: v[2] }; }
-        else { const v = [0, 0, 0]; v[Math.floor(Math.random() * 3)] = 1 + Math.floor(Math.random() * 2); stats = { soul: v[0], mind: v[1], will: v[2] }; }
+        else { 
+          const v = [0, 0, 0]; 
+          const mag = 1 + Math.floor(Math.random() * 3); 
+          const sign = Math.random() > 0.5 ? 1 : -1;
+          v[Math.floor(Math.random() * 3)] = mag * sign; 
+          stats = { soul: v[0], mind: v[1], will: v[2] }; 
+        }
         const card = {
-          id: `gen_${ts}_${type[0]}${i}`, name: "", type, ...stats,
+          id: `gen_${ts}_${type[0]}${i}_${Math.random().toString(36).slice(2, 7)}`, name: "", type, ...stats,
           rarity: "common", set: name, weight: 100, image: null
         };
         if (pwr) card.power = pwr;
@@ -1121,7 +1415,7 @@ export default function Trinity() {
   const LBL = { fontFamily: FONT_UI, fontSize: 7, color: T.textDim, letterSpacing: 2, display: "block", marginBottom: 1, textTransform: "uppercase", fontWeight: 700 };
   const INP = { width: "100%", padding: "4px 7px", background: T.bg2, border: `1px solid ${T.panelBorder}`, borderRadius: 2, color: T.text, fontFamily: FONT_BODY, fontSize: 12, outline: "none" };
 
-  const tabs = [["play", "Play"], ["browse", "Codex"], ["decks", "Decks"], ["packs", "Packs"], ["create", "Forge"], ["editor", "Editor"]];
+  const tabs = [["play", "Play"], ["duel", "Duel"], ["browse", "Codex"], ["decks", "Decks"], ["packs", "Packs"], ["create", "Forge"], ["editor", "Editor"]];
 
   return (
     <div style={{ height: "100vh", overflow: "hidden", background: T.bg, color: T.text, fontFamily: FONT_BODY, display: "flex", flexDirection: "column" }}>
@@ -1136,27 +1430,35 @@ export default function Trinity() {
           <div style={{ fontFamily: FONT_UI, fontSize: 10, color: T.silver, letterSpacing: 4 }}>LOADING STATE...</div>
         </div>
       )}
-      <header style={{ background: T.bg2, borderBottom: `1px solid ${T.panelBorder}`, padding: "4px 12px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <span style={{ fontFamily: FONT_TITLE, fontSize: 22, color: T.white, lineHeight: 1 }}>Trinity</span>
-        <div style={{ width: 1, height: 18, background: T.panelBorder }} />
-        <nav style={{ display: "flex", gap: 1 }}>
+      <header style={{ background: T.bg2, borderBottom: `1px solid ${T.panelBorder}`, padding: "10px 20px", display: "flex", alignItems: "center", gap: 15, flexShrink: 0 }}>
+        <span style={{ fontFamily: FONT_TITLE, fontSize: 32, color: T.white, lineHeight: 1 }}>Trinity</span>
+        <div style={{ width: 1, height: 24, background: T.panelBorder }} />
+        <nav style={{ display: "flex", gap: 3 }}>
           {tabs.map(([id, l]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              padding: "3px 8px", background: tab === id ? T.white + "08" : "transparent",
+            <button key={id} onClick={() => { setTab(id); if (id !== "duel" && !game) setMMode(false); }} style={{
+              padding: "4px 12px", background: tab === id ? T.white + "08" : "transparent",
               border: `1px solid ${tab === id ? T.silverDim : "transparent"}`, borderRadius: 2, cursor: "pointer",
-              color: tab === id ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 7, letterSpacing: 2,
+              color: tab === id ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 10, letterSpacing: 2.5,
               textTransform: "uppercase", fontWeight: tab === id ? 900 : 500
             }}>{l}</button>))}
         </nav>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={() => setMuted(!muted)} style={{
+            background: "none", border: "none", cursor: "pointer", color: muted ? T.danger : T.silverBright,
+            padding: 4, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.8
+          }}>
+            <span style={{ fontSize: 14 }}>{muted ? "🔇" : "🔊"}</span>
+          </button>
+        </div>
       </header>
 
-      <main style={{ flex: 1, overflow: tab === "play" && game ? "hidden" : "auto", padding: "6px 10px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, overflow: (tab === "play" || tab === "duel") && game ? "hidden" : "auto", padding: (tab === "play" || tab === "duel") ? "12px 20px" : "6px 10px", maxWidth: 1100, margin: "0 auto", width: "100%", minHeight: 0 }}>
 
-        {/* Play lobby */}
+        {/* Play lobby (Original AI) */}
         {tab === "play" && !game && (
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Trinity</div>
-            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>THE WAR IN HEAVEN</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>SINGLE PLAYER</div>
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
               {[["GOOD", selDI, setSelDI, T.silverBright], ["EVIL", oppDI, setOppDI, T.curse]].map(([lb, sel, setSel, col], sideIdx) => {
                 const isEvil = sideIdx === 1;
@@ -1174,6 +1476,7 @@ export default function Trinity() {
                         }
                         return (
                           <button key={i} onClick={() => {
+                            playSfx("select");
                             setSel(i);
                             if (!isEvil) {
                               const nextPMag = getDeckMagnitude(d, cardPool);
@@ -1213,10 +1516,85 @@ export default function Trinity() {
           </div>
         )}
 
-        {/* Play game - card images FILL cells */}
-        {tab === "play" && game && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 6, height: "calc(100vh - 40px)", animation: "fadeIn .3s", overflow: "hidden" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
+        {/* Duel Lobby (Multiplayer) */}
+        {tab === "duel" && !game && (
+          <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Duel</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>MULTIPLAYER HUB</div>
+            
+            <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
+              {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "player"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "ai"]].map(([lb, sel, setSel, col, role], sideIdx) => {
+                const isTaken = mTaken.includes(role);
+                const isMyRole = mRole === role;
+                const showLock = isTaken && !isMyRole;
+
+                return (
+                  <div key={lb} style={{ display: "flex", flexDirection: "column", gap: 4, opacity: showLock ? 0.35 : 1, pointerEvents: showLock ? "none" : "auto" }}>
+                    <div style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI, letterSpacing: 2, marginBottom: 3, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
+                      <span>{lb}</span>
+                      {isTaken && <span style={{ color: isMyRole ? T.bless : T.danger }}>{isMyRole ? "(YOU)" : "(OPP)"}</span>}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {decks.map((d, i) => {
+                        const mag = getDeckMagnitude(d, cardPool);
+                        // Filter by polarity if needed, but in Duel we allow more freedom or can stick to constraints
+                        const pMag = getDeckMagnitude(decks[selDI], cardPool);
+                        let disabled = sideIdx === 1 && ((pMag > 0 && mag > 0) || (pMag < 0 && mag < 0));
+
+                        return (
+                          <button key={i} onClick={() => {
+                            if (!isMyRole) return;
+                            playSfx("select");
+                            setSel(i);
+                            if (ws.current?.readyState === WebSocket.OPEN) {
+                              ws.current.send(JSON.stringify({ type: "select_deck", role, deck: d }));
+                            }
+                          }} style={{
+                            padding: "6px 10px", background: sel === i ? col + "14" : T.panel,
+                            border: `1px solid ${sel === i ? col : T.panelBorder}`, borderRadius: 2,
+                            cursor: isMyRole ? "pointer" : "default", color: sel === i ? col : T.textDim, fontFamily: FONT_UI,
+                            fontSize: 8, fontWeight: 700, textAlign: "left",
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            opacity: (disabled || !isMyRole) && sel !== i ? 0.35 : 1, transition: "all .2s"
+                          }}>
+                            <span>{d.name}</span>
+                            <span style={{ fontSize: 10, color: mag > 0 ? T.bless : mag < 0 ? T.curse : T.silver, opacity: 0.8 }}>
+                              {mag > 0 ? "△" : mag < 0 ? "▽" : "✡"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {mOppDeck && <div style={{ marginBottom: 16, fontSize: 9, color: T.silver, fontFamily: FONT_UI }}>Opponent selected: <span style={{ color: T.white }}>{mOppDeck}</span></div>}
+            
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+              <button onClick={startGame} disabled={mWait || !mRole || mRole === "spectator"} style={{
+                padding: "6px 32px", background: "transparent", border: `1.5px solid ${T.silverBright}`, borderRadius: 2,
+                cursor: mWait || !mRole || mRole === "spectator" ? "default" : "pointer", fontFamily: FONT_TITLE, fontSize: 16, color: T.white, letterSpacing: 4,
+                opacity: mWait || !mRole || mRole === "spectator" ? 0.4 : 1
+              }}>
+                {mWait ? "WAITING..." : "FORGE BATTLE"}
+              </button>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: mRole ? T.bless : T.danger }} />
+                <div style={{ fontSize: 8, color: T.silverBright, fontFamily: FONT_UI, letterSpacing: 2 }}>
+                  {mRole ? `STATUS: CONNECTED AS ${mRole.toUpperCase()}` : "STATUS: CONNECTING..."}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Play/Duel game board */}
+        {(tab === "play" || tab === "duel") && game && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 200px", gap: 10, height: "100%", animation: "fadeIn .3s", overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
               {/* BOARD — cards fill cells */}
               <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{
@@ -1224,14 +1602,21 @@ export default function Trinity() {
                   background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3,
                   maxHeight: "100%", maxWidth: "100%", height: "100%", aspectRatio: "1/1"
                 }}>
-                  {game.bd.map((row, r) => row.map((cell, c) => {
+                  {Array.from({length: 5}).map((_, vr) => Array.from({length: 5}).map((_, vc) => {
+                    const mr = (mMode && mRole) || "player";
+                    const r = (mr === "ai") ? 4 - vr : vr;
+                    const c = (mr === "ai") ? 4 - vc : vc;
+                    const cell = game.bd[r][c];
                     const h = isH(r, c); const sel = selB && selB[0] === r && selB[1] === c;
-                    const zone = r < 2 ? `${T.curse}06` : r > 2 ? `${T.bless}06` : "transparent";
+                    
+                    // Zone mapping remains consistent to the visual row for bottom playing 
+                    const zone = vr < 2 ? `${T.curse}06` : vr > 2 ? `${T.bless}06` : "transparent";
+                    
                     return (
-                      <div key={`${r}-${c}`} onClick={() => boardClick(r, c)} style={{
+                      <div key={`${vr}-${vc}`} onClick={() => boardClick(vr, vc)} style={{
                         background: h ? T.gridCellHL : sel ? T.silver + "14" : T.gridCell,
                         border: `1px solid ${h ? T.silver + "55" : sel ? T.silver : T.panelBorder}`,
-                        borderRadius: 2, cursor: h || cell?.ow === "player" ? "pointer" : "default",
+                        borderRadius: 2, cursor: h || cell?.ow === mr ? "pointer" : "default",
                         display: "flex", alignItems: "stretch", justifyContent: "stretch",
                         transition: "all .1s", animation: h ? "glow 1.5s ease-in-out infinite" : cell?.fd ? "trapGlow 2s ease-in-out infinite" : "none",
                         backgroundImage: !cell ? `linear-gradient(135deg,${zone},transparent)` : "none",
@@ -1246,28 +1631,33 @@ export default function Trinity() {
               {/* Player hand — horizontally scrollable */}
               <div style={{
                 flexShrink: 0, minWidth: 0, overflow: "hidden",
-                padding: "2px 6px", background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3
+                padding: "2px 6px", background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3,
+                maxHeight: 160
               }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>YOU: {game.pD.length}d</span>
-                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>OPP: {game.aD.length}d</span>
+                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>YOU: {game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length}d</span>
+                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>OPP: {game[((mMode && mRole) || "player") === "player" ? "aD" : "pD"].length}d</span>
                 </div>
-                <div style={{ display: "flex", gap: 4, overflowX: "auto", overflowY: "hidden", paddingBottom: 2 }}>
-                  {game.pH.map((card, i) => (
-                    <Card key={i} card={card} sz={78} sel={selH === i} noRar
-                      onClick={() => game.turn === "player" && !aiR ? selectHand(i) : null} />
-                  ))}
+                <div style={{ display: "flex", gap: 6, overflowX: "auto", overflowY: "hidden", paddingBottom: 4 }}>
+                  {(() => {
+                    const mr = (mMode && mRole) || "player";
+                    const mhk = mr === "player" ? "pH" : "aH";
+                    return game[mhk].map((card, i) => (
+                      <Card key={i} card={card} sz={110} sel={selH === i} noRar
+                        onClick={() => game.turn === mr && !aiR ? selectHand(i) : null} />
+                    ));
+                  })()}
                 </div>
               </div>
             </div>
             {/* Right panel — info top, controls bottom */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0, height: "100%", overflow: "hidden" }}>
               {/* Top: turn info */}
               <div style={{ padding: 6, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, flexShrink: 0 }}>
                 <div style={{ fontFamily: FONT_UI, fontSize: 10, color: T.textDim, letterSpacing: 3, fontWeight: 700 }}>TURN {game.tn}</div>
-                <div style={{ fontFamily: FONT_UI, fontSize: 18, fontWeight: 900, color: game.turn === "player" ? T.silverBright : T.textDim, marginTop: 2 }}>
-                  {game.ph === "over" ? (game.win === "player" ? "✦ VICTORY" : "▽ DEFEAT") : game.turn === "player" ? "Your Turn" : "Opponent..."}</div>
-                {game.ph === "playing" && game.turn === "player" && (
+                <div style={{ fontFamily: FONT_UI, fontSize: 18, fontWeight: 900, color: game.turn === ((mMode && mRole) || "player") ? T.silverBright : T.textDim, marginTop: 2 }}>
+                  {game.ph === "over" ? (game.win === ((mMode && mRole) || "player") ? "✦ VICTORY" : "▽ DEFEAT") : game.turn === ((mMode && mRole) || "player") ? "Your Turn" : "Opponent..."}</div>
+                {game.ph === "playing" && game.turn === ((mMode && mRole) || "player") && (
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                     {[0, 1, 2].map(i => (<div key={i} style={{
                       width: 16, height: 16, transform: "rotate(45deg)",
@@ -1293,7 +1683,7 @@ export default function Trinity() {
                         background: ic.cd.image ? `url(${ic.cd.image}) center/cover` : T.card
                       }} />
                       <div>
-                        <div style={{ fontSize: 7, color: TC[ic.cd.type], fontFamily: FONT_UI, textTransform: "uppercase", fontWeight: 800 }}>{ic.cd.type} ({ic.ow === "player" ? "You" : "Opp"})</div>
+                        <div style={{ fontSize: 7, color: TC[ic.cd.type], fontFamily: FONT_UI, textTransform: "uppercase", fontWeight: 800 }}>{ic.cd.type} ({ic.ow === ((mMode && mRole) || "player") ? "You" : "Opp"})</div>
                         {eff && <div style={{ display: "flex", gap: 4, marginTop: 1 }}>
                           {STAT_DEFS.map(s => {
                             const v = eff[s.key]; return (
@@ -1324,12 +1714,12 @@ export default function Trinity() {
                   </div>
                 </div>)}
               {/* Log */}
-              <div ref={logRef} style={{ flex: 1, minHeight: 60, overflowY: "auto", padding: 4, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3 }}>
+              <div ref={logRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 4, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3 }}>
                 {log.map((m, i) => (<div key={i} style={{ color: m.includes("⚔") ? "#a06070" : m.includes("✦") || m.includes("⟐") ? T.silverBright : m.includes("⚡") ? T.curse : T.textDim, lineHeight: 1.3, fontSize: 10 }}>{m}</div>))}
               </div>
               {/* Controls — at bottom */}
               <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
-                {game.ph === "playing" && game.turn === "player" && !aiR && (<>
+                {game.ph === "playing" && isMyTurn() && !aiR && (<>
                   {(mode === "blessing" || mode === "curse") && selH !== null && (<>
                     <button onClick={() => playBC(mode)} style={B(mode === "blessing" ? T.bless : T.curse)}>
                       {mode === "blessing" ? "△" : "▽"} Play ({game.c === 0 ? "FREE" : "1"})</button>
@@ -1340,7 +1730,7 @@ export default function Trinity() {
                         ...B(s.color), flex: 1, textTransform: "uppercase", letterSpacing: 2
                       }}>{s.label}</button>))}
                     </div>)}
-                  <button onClick={drawCard} disabled={game.act <= 0 || !game.pD.length} style={B(T.entity, game.act <= 0)}>Draw ({game.pD.length})</button>
+                  <button onClick={drawCard} disabled={game.act <= 0 || !game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length} style={B(T.entity, game.act <= 0)}>Draw ({game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length})</button>
                   {mode && <button onClick={clr} style={B(T.textDim)}>Cancel</button>}
                   <button onClick={endTurn} style={{ ...B(T.silverBright), letterSpacing: 3, fontSize: 13, marginTop: 4 }}>END TURN</button>
                 </>)}
@@ -1558,7 +1948,7 @@ export default function Trinity() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: FONT_UI }}>
                     <thead>
                       <tr style={{ borderBottom: `1px solid ${T.panelBorder}`, position: "sticky", top: 0, background: T.panel }}>
-                        {["#", "Art", "Type", "S", "M", "W", "|Pwr|", "Aura", "Rar", "C Pwr"].map(h => (
+                        {["#", "Art", "Type", "Uniq", "S", "M", "W", "|Pwr|", "Aura", "Rar", "C Pwr"].map(h => (
                           <th key={h} style={{ textAlign: "left", padding: "2px 4px", color: T.textDim, fontWeight: 700, fontSize: 7, letterSpacing: 1 }}>{h}</th>))}
                       </tr>
                     </thead>
@@ -1593,6 +1983,7 @@ export default function Trinity() {
                               </label>
                             </td>
                             <td style={{ padding: "1px 4px", color: TC[c.type] || T.text }}>{c.type.slice(0, 3)}</td>
+                            <td style={{ padding: "1px 4px", color: T.textBright }}>{c.isUnique ? "✧" : "·"}</td>
                             <td style={{ padding: "1px 4px", color: c.soul > 0 ? STAT_DEFS[0].color : c.soul < 0 ? T.curse : T.textDim }}>{c.soul || "·"}</td>
                             <td style={{ padding: "1px 4px", color: c.mind > 0 ? STAT_DEFS[1].color : c.mind < 0 ? T.curse : T.textDim }}>{c.mind || "·"}</td>
                             <td style={{ padding: "1px 4px", color: c.will > 0 ? STAT_DEFS[2].color : c.will < 0 ? T.curse : T.textDim }}>{c.will || "·"}</td>
@@ -1659,11 +2050,11 @@ export default function Trinity() {
                       <div key={label} style={{ background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, padding: 8 }}>
                         <div style={{ ...LBL, marginBottom: 4, fontSize: 8 }}>{label}</div>
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxHeight: 520, overflowY: "auto" }}>
-                          {ci === 0 ? ownedCards.map(card => {
+                          {ci === 0 ? ownedCards.map((card, idx) => {
                             const inDk = decks[editDeck.idx]?.cards.filter(id => id === card.id).length || 0;
                             const avail = owned(card.id) - inDk;
-                            return (<div key={card.id} style={{ position: "relative" }}>
-                              <Card card={card} sz={72} dim={avail <= 0} onClick={() => {
+                            return (<div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
+                              <Card card={card} sz={100} dim={avail <= 0} onClick={() => {
                                 if (avail <= 0) return; const dk = decks[editDeck.idx];
                                 if (dk.cards.length >= DECK_SIZE || inDk >= MAX_COPIES) return;
                                 const u = [...decks]; u[editDeck.idx] = { ...dk, cards: [...dk.cards, card.id] }; setDecks(u);
@@ -1675,7 +2066,7 @@ export default function Trinity() {
                             </div>);
                           })
                             : deckCards.map((card, i) => (
-                                <Card key={`${card.id}_${i}`} card={card} sz={72} onClick={() => {
+                                <Card key={`${card.id}_${i}`} card={card} sz={100} onClick={() => {
                                   const u = [...decks]; const cards = [...u[editDeck.idx].cards];
                                   const origIdx = cards.indexOf(card.id);
                                   if (origIdx !== -1) cards.splice(origIdx, 1);
@@ -1712,11 +2103,11 @@ export default function Trinity() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: bDet ? "1fr 220px" : "1fr", gap: 6 }}>
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                {cardPool.filter(c => (bF === "all" || c.type === bF) && (bSetF === "all" || sets.some(s => s.name === bSetF && s.cardIds.includes(c.id)))).map(card => {
+                {cardPool.filter(c => (bF === "all" || c.type === bF) && (bSetF === "all" || sets.some(s => s.name === bSetF && s.cardIds.includes(c.id)))).map((card, idx) => {
                   const isMasked = !owned(card.id) && card.rarity === "legendary";
                   return (
-                    <div key={card.id} style={{ position: "relative" }}>
-                      <Card card={card} sz={70} onClick={isMasked ? undefined : () => { setBDet(card); setEditN(null); }} sel={bDet?.id === card.id} notOwned={!owned(card.id)} mask={!owned(card.id)} />
+                    <div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
+                      <Card card={card} sz={100} onClick={isMasked ? undefined : () => { setBDet(card); setEditN(null); }} sel={bDet?.id === card.id} notOwned={!owned(card.id)} mask={!owned(card.id)} />
                       {owned(card.id) > 0 && <div style={{
                         position: "absolute", top: -2, right: -2, minWidth: 10, height: 10, background: T.silverBright, borderRadius: "50%",
                         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 6, color: "#000", fontWeight: 800
@@ -1891,8 +2282,8 @@ export default function Trinity() {
                 {/* Card grid — drag images onto cards to assign art */}
                 <div style={{ display: "flex", gap: 3, flexWrap: "wrap", alignContent: "start", maxHeight: "calc(100vh - 110px)", overflowY: "auto", padding: 2 }}
                   onDragOver={e => e.preventDefault()}>
-                  {filtered.map(card => (
-                    <div key={card.id} style={{ position: "relative" }}
+                  {filtered.map((card, idx) => (
+                    <div key={`${card.id}_${idx}`} style={{ position: "relative" }}
                       onDragOver={e => { e.preventDefault(); e.currentTarget.style.outline = `2px solid ${T.silverBright}`; }}
                       onDragLeave={e => { e.currentTarget.style.outline = "none"; }}
                       onDrop={e => {
@@ -1904,7 +2295,7 @@ export default function Trinity() {
                           });
                         }
                       }}>
-                      <Card card={card} sz={70} onClick={() => setEditCard(card)} sel={editCard?.id === card.id} />
+                      <Card card={card} sz={100} onClick={() => setEditCard(card)} sel={editCard?.id === card.id} />
                       {!card.image && <div style={{ position: "absolute", top: 2, right: 2, width: 6, height: 6, borderRadius: "50%", background: T.curse }} />}
                     </div>))}
                   {!filtered.length && <div style={{ fontSize: 10, color: T.textDim, padding: 12 }}>No cards match filters.</div>}
@@ -2023,7 +2414,6 @@ export default function Trinity() {
               </div>
             </div>);
         })()}
-
       </main>
     </div>
   );
