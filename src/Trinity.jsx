@@ -338,6 +338,7 @@ export default function Trinity() {
   const [mMode, setMMode] = useState(false);
   const [mRole, setMRole] = useState(null); // "player", "ai", or "spectator"
   const [mTaken, setMTaken] = useState([]);
+  const curR = (mMode ? (mRole === "p1" ? "player" : "ai") : "player");
   const [mOppDeck, setMOppDeck] = useState(null);
   const [mWait, setMWait] = useState(false);
   const ws = useRef(null);
@@ -475,6 +476,8 @@ export default function Trinity() {
         } else if (msg.type === "deck_selected") {
           if (msg.role !== mRoleRef.current) {
             setMOppDeck(msg.deck_name);
+            if (msg.role === "p1") setSelDI(msg.deck_idx);
+            else if (msg.role === "p2") setOppDI(msg.deck_idx);
           }
         } else if (msg.type === "ready_to_start") {
           setMWait(false);
@@ -709,11 +712,10 @@ export default function Trinity() {
   
   const handleKeys = useCallback((e) => {
     if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
-    if (tab !== "play" || !game || game.ph !== "playing" || aiR) return;
+    if ((tab !== "play" && tab !== "duel") || !game || game.ph !== "playing" || aiR) return;
 
     // In multiplayer, only the active player can use shortcuts
-    if (mMode && game.turn !== mRole) return;
-    if (!mMode && game.turn !== "player") return;
+    if (mMode && game.turn !== curR) return;
 
     const k = e.key.toLowerCase();
     if (k === "d") { drawCard(); }
@@ -877,12 +879,10 @@ export default function Trinity() {
     }
   }
 
-  // Helper check for "is it my turn?"
   const isMyTurn = useCallback(() => {
     if (!game || game.ph !== "playing") return false;
-    const mr = (mMode && mRole) || "player";
-    return game.turn === mr;
-  }, [game, mMode, mRole]);
+    return game.turn === curR;
+  }, [game, curR]);
   function clr() { setSelH(null); setSelB(null); setHl([]); setMode(null); setTapTgt(null); setInspCell(null); }
   function forfeit() { 
     if (mMode) {
@@ -893,7 +893,7 @@ export default function Trinity() {
 
   function drawCard() {
     if (!game || game.ph !== "playing" || !isMyTurn() || game.act <= 0) return;
-    const mr = (mMode && mRole) || "player";
+    const mr = curR;
     const mdk = mr === "player" ? "pD" : "aD";
     const mhk = mr === "player" ? "pH" : "aH";
     const deck = game[mdk];
@@ -913,7 +913,7 @@ export default function Trinity() {
     updateGame(g); clr();
   }
   function selectHand(idx) {
-    const mr = (mMode && mRole) || "player";
+    const mr = curR;
     if (!game || game.turn !== mr || game.act <= 0 || game.ph !== "playing") return;
     const mhk = mr === "player" ? "pH" : "aH";
     const c = game[mhk][idx]; setSelH(idx); setSelB(null);
@@ -946,7 +946,7 @@ export default function Trinity() {
   }
   function playBC(type) {
     if (!game || selH === null) return; 
-    const mr = (mMode && mRole) || "player";
+    const mr = curR;
     const mhk = mr === "player" ? "pH" : "aH";
     const c = game[mhk][selH]; const cost = game.c === 0 ? 0 : 1;
     if (game.act < cost) return; 
@@ -964,7 +964,7 @@ export default function Trinity() {
     setHl(cells); setMode("setTrap");
   }
   function boardClick(vr, vc) {
-    const mr = (mMode && mRole) || "player";
+    const mr = curR;
     const or = mr === "player" ? "ai" : "player";
     const r = (mr === "ai") ? 4 - vr : vr;
     const c = (mr === "ai") ? 4 - vc : vc;
@@ -1086,7 +1086,8 @@ export default function Trinity() {
     flipSets(g, nextTurn); g.tn++;
     
     if (mMode) {
-      updateGame(g); clr(); addLog(`— ${nextTurn === mRole ? "Your" : "Opp"} Turn —`);
+      updateGame(g); clr(); 
+      addLog(`— ${nextTurn === curR ? "Your" : "Opp"} Turn —`);
     } else {
       setGame(g); clr(); addLog("— Opp —"); setAiR(true); setTimeout(() => runAI(g, 0), 500 + Math.random() * 1500);
     }
@@ -1531,7 +1532,7 @@ export default function Trinity() {
             <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
             
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
-              {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "player"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "ai"]].map(([lb, sel, setSel, col, role], sideIdx) => {
+              {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "p1"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "p2"]].map(([lb, sel, setSel, col, role], sideIdx) => {
                 const isTaken = mTaken.includes(role);
                 const isMyRole = mRole === role;
                 const showLock = isTaken && !isMyRole;
@@ -1555,7 +1556,7 @@ export default function Trinity() {
                             playSfx("select");
                             setSel(i);
                             if (ws.current?.readyState === WebSocket.OPEN) {
-                              ws.current.send(JSON.stringify({ type: "select_deck", role, deck: d }));
+                              ws.current.send(JSON.stringify({ type: "select_deck", role, deck: d, deck_idx: i }));
                             }
                           }} style={{
                             padding: "6px 10px", background: sel === i ? col + "14" : T.panel,
@@ -1594,6 +1595,13 @@ export default function Trinity() {
                 <div style={{ fontSize: 8, color: T.silverBright, fontFamily: FONT_UI, letterSpacing: 2 }}>
                   {mRole ? `STATUS: CONNECTED AS ${mRole.toUpperCase()}` : "STATUS: CONNECTING..."}
                 </div>
+                <button onClick={() => {
+                  if (confirm("Hard reset will kick ALL players and clear the game. Continue?")) {
+                    ws.current?.send(JSON.stringify({ type: "reset", hard: true }));
+                  }
+                }} style={{
+                  background: "transparent", border: `1px solid ${T.danger}`, color: T.danger, fontSize: 6, padding: "2px 6px", borderRadius: 2, cursor: "pointer", opacity: 0.6, marginLeft: 8
+                }}>HARD RESET ROOM</button>
               </div>
             </div>
           </div>
@@ -1611,7 +1619,7 @@ export default function Trinity() {
                   maxHeight: "100%", maxWidth: "100%", height: "100%", aspectRatio: "1/1"
                 }}>
                   {Array.from({length: 5}).map((_, vr) => Array.from({length: 5}).map((_, vc) => {
-                    const mr = (mMode && mRole) || "player";
+                    const mr = curR;
                     const r = (mr === "ai") ? 4 - vr : vr;
                     const c = (mr === "ai") ? 4 - vc : vc;
                     const cell = game.bd[r][c];
@@ -1643,12 +1651,12 @@ export default function Trinity() {
                 maxHeight: 160
               }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>YOU: {game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length}d</span>
-                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>OPP: {game[((mMode && mRole) || "player") === "player" ? "aD" : "pD"].length}d</span>
+                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>YOU: {game[curR === "player" ? "pD" : "aD"].length}d</span>
+                  <span style={{ fontFamily: FONT_UI, fontSize: 6, color: T.textDim, fontWeight: 700 }}>OPP: {game[curR === "player" ? "aD" : "pD"].length}d</span>
                 </div>
                 <div style={{ display: "flex", gap: 6, overflowX: "auto", overflowY: "hidden", paddingBottom: 4 }}>
                   {(() => {
-                    const mr = (mMode && mRole) || "player";
+                    const mr = curR;
                     const mhk = mr === "player" ? "pH" : "aH";
                     return game[mhk].map((card, i) => (
                       <Card key={i} card={card} sz={110} sel={selH === i} noRar
@@ -1663,9 +1671,9 @@ export default function Trinity() {
               {/* Top: turn info */}
               <div style={{ padding: 6, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, flexShrink: 0 }}>
                 <div style={{ fontFamily: FONT_UI, fontSize: 10, color: T.textDim, letterSpacing: 3, fontWeight: 700 }}>TURN {game.tn}</div>
-                <div style={{ fontFamily: FONT_UI, fontSize: 18, fontWeight: 900, color: game.turn === ((mMode && mRole) || "player") ? T.silverBright : T.textDim, marginTop: 2 }}>
-                  {game.ph === "over" ? (game.win === ((mMode && mRole) || "player") ? "✦ VICTORY" : "▽ DEFEAT") : game.turn === ((mMode && mRole) || "player") ? "Your Turn" : "Opponent..."}</div>
-                {game.ph === "playing" && game.turn === ((mMode && mRole) || "player") && (
+                <div style={{ fontFamily: FONT_UI, fontSize: 18, fontWeight: 900, color: game.turn === curR ? T.silverBright : T.textDim, marginTop: 2 }}>
+                  {game.ph === "over" ? (game.win === curR ? "✦ VICTORY" : "▽ DEFEAT") : game.turn === curR ? "Your Turn" : "Opponent..."}</div>
+                {game.ph === "playing" && game.turn === curR && (
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                     {[0, 1, 2].map(i => (<div key={i} style={{
                       width: 16, height: 16, transform: "rotate(45deg)",
@@ -1679,7 +1687,7 @@ export default function Trinity() {
               {inspCell && game.bd[inspCell[0]]?.[inspCell[1]] && (() => {
                 const ic = game.bd[inspCell[0]][inspCell[1]];
                 const eff = ic.cd.type === "entity" ? getEff(ic.cd, game.bd, inspCell[0], inspCell[1], ic.ib) : null;
-                const mr = (mMode && mRole) || "player";
+                const mr = curR;
                 const isSecret = ic.fd && ic.ow !== mr;
 
                 return (
@@ -1747,7 +1755,7 @@ export default function Trinity() {
                         ...B(s.color), flex: 1, textTransform: "uppercase", letterSpacing: 2
                       }}>{s.label}</button>))}
                     </div>)}
-                  <button onClick={drawCard} disabled={game.act <= 0 || !game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length} style={B(T.entity, game.act <= 0)}>Draw ({game[((mMode && mRole) || "player") === "player" ? "pD" : "aD"].length})</button>
+                  <button onClick={drawCard} disabled={game.act <= 0 || !game[curR === "player" ? "pD" : "aD"].length} style={B(T.entity, game.act <= 0)}>Draw ({game[curR === "player" ? "pD" : "aD"].length})</button>
                   {mode && <button onClick={clr} style={B(T.textDim)}>Cancel</button>}
                   <button onClick={endTurn} style={{ ...B(T.silverBright), letterSpacing: 3, fontSize: 13, marginTop: 4 }}>END TURN</button>
                 </>)}

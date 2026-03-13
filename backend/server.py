@@ -18,12 +18,10 @@ log = logging.getLogger("trinity")
 app = FastAPI(title="Trinity API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# ═══ Multiplayer Game Manager ═══
-
 class GameManager:
     def __init__(self):
-        self.players: Dict[str, WebSocket] = {}  # role ("player" or "ai") -> socket
-        self.decks: Dict[str, dict] = {}       # role -> deck object
+        self.players: Dict[str, WebSocket] = {}  # role ("p1" or "p2") -> socket
+        self.decks: Dict[str, dict] = {}  # role -> deck object
         self.game_state: Optional[dict] = None
         self.spectators: List[WebSocket] = []
 
@@ -35,8 +33,9 @@ class GameManager:
             except:
                 dead_roles.append(role)
         for role in dead_roles:
+            log.info(f"Removing dead player role: {role}")
             del self.players[role]
-        
+
         dead_specs = []
         for ws in self.spectators:
             try:
@@ -46,11 +45,15 @@ class GameManager:
         for ws in dead_specs:
             self.spectators.remove(ws)
 
-    def reset(self):
-        self.players = {}
+    def reset(self, hard=False):
+        log.info(f"Resetting game manager state (hard={hard})")
+        if hard:
+            self.players = {}
         self.decks = {}
         self.game_state = None
-        # Keep spectators
+        # Keep spectators unless hard reset
+        if hard:
+            self.spectators = []
 
 gm = GameManager()
 
@@ -58,7 +61,7 @@ gm = GameManager()
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     log.info(f"Accepted WebSocket connection from {websocket.client}")
-    
+
     try:
         while True:
             data = await websocket.receive_json()
@@ -66,16 +69,17 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg_type == "join":
                 # First two get roles, others spectate
-                if "player" not in gm.players:
-                    role = "player"
+                if "p1" not in gm.players:
+                    role = "p1"
                     gm.players[role] = websocket
-                elif "ai" not in gm.players:
-                    role = "ai"
+                elif "p2" not in gm.players:
+                    role = "p2"
                     gm.players[role] = websocket
                 else:
                     role = "spectator"
                     gm.spectators.append(websocket)
-                
+
+                log.info(f"Client joined as: {role}")
                 await websocket.send_json({
                     "type": "welcome",
                     "role": role,
@@ -89,18 +93,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 deck = data.get("deck")
                 if role in gm.players:
                     gm.decks[role] = deck
+                    log.info(f"Deck selected by {role}: {deck.get('name')}")
                     await gm.broadcast({
                         "type": "deck_selected",
                         "role": role,
-                        "deck_name": deck.get("name")
+                        "deck_name": deck.get("name"),
+                        "deck_idx": data.get("deck_idx") # pass through index for easier sync
                     })
-                    
-                    # If both decks ready, start game if no active state
+
                     if len(gm.decks) == 2 and not gm.game_state:
+                        log.info("Both decks selected, ready to start!")
                         await gm.broadcast({"type": "ready_to_start"})
 
             elif msg_type == "start_game":
-                # Only one player needs to trigger this
+                log.info("Starting duel...")
                 gm.game_state = data.get("state")
                 await gm.broadcast({"type": "game_start", "state": gm.game_state})
 
@@ -116,11 +122,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 await gm.broadcast(data)
 
             elif msg_type == "reset":
-                gm.reset()
+                gm.reset(hard=data.get("hard", False))
                 await gm.broadcast({"type": "game_reset"})
 
     except WebSocketDisconnect:
-        # Find and remove
         role_to_remove = None
         for r, ws in gm.players.items():
             if ws == websocket:
@@ -129,12 +134,13 @@ async def websocket_endpoint(websocket: WebSocket):
         if role_to_remove:
             log.info(f"Player {role_to_remove} disconnected")
             del gm.players[role_to_remove]
+            if not gm.players: # if no players left, full reset
+                gm.reset()
             await gm.broadcast({"type": "room_update", "taken": list(gm.players.keys())})
         elif websocket in gm.spectators:
             gm.spectators.remove(websocket)
             log.info("Spectator disconnected")
 
-# ═══ Helper functions ═══
 
 HERE = Path(__file__).parent  # resolve paths relative to this file
 DATA = HERE / "data"
@@ -181,7 +187,6 @@ async def put_state(request: Request):
     if "tokens" in body: write_json("tokens", body["tokens"])
     return {"ok": True}
 
-# ═══ Individual endpoints ═══
 
 @app.get("/api/cards")
 def get_cards(): return read_json("cards", [])
