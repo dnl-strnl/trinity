@@ -1185,8 +1185,9 @@ export default function Trinity() {
 
     if (cell?.ow === mr && cell.cd.type === "entity" && !cell.fd && mode !== "chooseStat") {
       setSelB([r, c]); setSelH(null); setInspCell([r, c]); const isT = aura(cell.cd) === 0;
-      const a = adj(r, c, isT ? 2 : 1).filter(([tr, tc]) => canReach(r, c, tr, tc, game.bd));
-      setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === or && t.cd.type === "entity" && !t.fd; })]);
+      const moveA = adj(r, c, isT ? 2 : 1).filter(([tr, tc]) => canReach(r, c, tr, tc, game.bd));
+      const atkA = isT ? adjFull(r, c) : adj(r, c, 1);
+      setHl([...moveA.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...atkA.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === or && t.cd.type === "entity" && !t.fd; })]);
       setMode("moveOrTap"); return;
     }
     // Inspect: click any occupied cell when no mode is active
@@ -1287,8 +1288,8 @@ export default function Trinity() {
     let bestAtk = null, maxD = -999;
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
       const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
-      const range = aura(cl.cd) === 0 ? 2 : 1;
-      for (const [tr, tc] of adj(r, c, range).filter(([tr, tc]) => canReach(r, c, tr, tc, s.bd))) {
+      const atkCells = aura(cl.cd) === 0 ? adjFull(r, c) : adj(r, c, 1);
+      for (const [tr, tc] of atkCells.filter(([tr, tc]) => canReach(r, c, tr, tc, s.bd))) {
         const tg = s.bd[tr][tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
         const aS = getEff(cl.cd, s.bd, r, c, cl.ib), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
         STAT_DEFS.forEach(st => {
@@ -1329,9 +1330,9 @@ export default function Trinity() {
       if (s.bd[r][c]?.ow === "player" && s.bd[r][c]?.fd) score += 60;
 
       // Aggression: can we attack someone from here next turn?
-      const range = aura(card) === 0 ? 2 : 1;
+      const atkCells = aura(card) === 0 ? adjFull(r, c) : adj(r, c, 1);
       let targets = 0;
-      adj(r, c, range).forEach(([tr, tc]) => {
+      atkCells.forEach(([tr, tc]) => {
         const tg = s.bd[tr][tc];
         if (tg && tg.ow === "player" && tg.cd.type === "entity" && !tg.fd) {
           const aS = getEff(card, s.bd, r, c, {}), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
