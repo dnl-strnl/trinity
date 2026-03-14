@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "name": "A",
+    "id": "set_a",
+    "color": "#303030",
+    "cardIds": []
+  },
+  {
+    "name": "C",
+    "id": "set_c",
+    "color": "#484848",
+    "cardIds": []
+  },
+  {
+    "name": "D",
+    "id": "set_d",
+    "color": "#606060",
+    "cardIds": []
+  },
+  {
+    "name": "G",
+    "id": "set_g",
+    "color": "#787878",
+    "cardIds": []
+  },
+  {
+    "name": "L",
+    "id": "set_l",
+    "color": "#909090",
+    "cardIds": []
+  },
+  {
+    "name": "Q",
+    "id": "set_q",
+    "color": "#a8a8a8",
+    "cardIds": []
+  },
+  {
+    "name": "R",
+    "id": "set_r",
+    "color": "#b8b8b8",
+    "cardIds": []
+  },
+  {
+    "name": "S",
+    "id": "set_s",
+    "color": "#c8c8c8",
+    "cardIds": []
+  },
+  {
+    "name": "U",
+    "id": "set_u",
+    "color": "#d4d4d4",
+    "cardIds": []
+  },
+  {
+    "name": "W",
+    "id": "set_w",
+    "color": "#dedede",
+    "cardIds": []
+  },
+  {
+    "name": "X",
+    "id": "set_x",
+    "color": "#ebebeb",
+    "cardIds": []
+  },
+  {
+    "name": "Z",
+    "id": "set_z",
+    "color": "#f4f4f4",
+    "cardIds": []
+  }
+]

@@ -68,3 +68,4 @@ export const MAX_COPIES = 3;
 export const TOKENS_START = 2;
 export const TOKENS_PER_WIN = 1;
 export const PACK_COST = 1;
+export const CARDS_PER_PACK = 4;

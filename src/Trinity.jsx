@@ -3,7 +3,7 @@ import {
   FONT_TITLE, FONT_UI, FONT_BODY, FONT_URL, THEME as T, TYPE_COLORS as TC,
   DEFAULT_GRADS as DG, RARITY_COLORS as RC, RARITY_ORDER as RO,
   STAT_DEFS, STAT_MIN, STAT_MAX, C_MAX, DECK_SIZE, HAND_SIZE, MAX_COPIES,
-  TOKENS_START, TOKENS_PER_WIN, PACK_COST,
+  TOKENS_START, TOKENS_PER_WIN, PACK_COST, CARDS_PER_PACK,
 } from "./theme.js";
 
 const fl = document.createElement("link");
@@ -34,13 +34,39 @@ function adj(r, c, d = 1) {
   }
   return o;
 }
+// All 8 surrounding cells (Chebyshev distance 1) for transcendent entity range
+function adjFull(r, c) {
+  const o = [];
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    if (!dr && !dc) continue;
+    const nr = r + dr, nc = c + dc;
+    if (nr >= 0 && nr < 5 && nc >= 0 && nc < 5) o.push([nr, nc]);
+  }
+  return o;
+}
+function isTranscendent(c) { return (c.soul || 0) + (c.mind || 0) + (c.will || 0) === 0; }
+function nextCardId(type, allCards) {
+  const PREFIX = { entity: "ENT", blessing: "BLE", curse: "CUR", equip: "EQU", terrain: "TER" };
+  const pfx = PREFIX[type] || "UNK";
+  const re = new RegExp(`^${pfx}-(\\d{5})$`);
+  let max = 0;
+  for (const c of allCards) { const m = c.id?.match(re); if (m) max = Math.max(max, parseInt(m[1])); }
+  return `${pfx}-${String(max + 1).padStart(5, "0")}`;
+}
+// Returns false if moving from (r,c) to (tr,tc) would jump over a blocking entity
+function canReach(r, c, tr, tc, bd) {
+  const dr = tr - r, dc = tc - c;
+  if (Math.abs(dr) === 2 && dc === 0) { const mid = bd[r + dr / 2]?.[c]; return !mid || mid.fd; }
+  if (Math.abs(dc) === 2 && dr === 0) { const mid = bd[r]?.[c + dc / 2]; return !mid || mid.fd; }
+  return true;
+}
 function hasAdjTerrain(r, c, bd) {
-  return adj(r, c).some(([ar, ac]) => bd[ar]?.[ac]?.cd.type === "terrain");
+  return adjFull(r, c).some(([ar, ac]) => bd[ar]?.[ac]?.cd.type === "terrain");
 }
 
 function tBonus(bd, r, c) {
   const b = { soul: 0, mind: 0, will: 0 };
-  adj(r, c).forEach(([ar, ac]) => {
+  adjFull(r, c).forEach(([ar, ac]) => {
     const cl = bd[ar]?.[ac];
     if (cl?.cd?.type === "terrain") STAT_DEFS.forEach(s => { b[s.key] += cl.cd[s.key] || 0; });
   }); return b;
@@ -108,9 +134,10 @@ function Card({ card, sz, fill, onClick, sel, fDown, dim, owner, sparkle, noRar,
           {card.type === "entity" && <span style={{
             position: "absolute", top: 2, left: 2, fontSize: fs,
             background: "#000a", borderRadius: 2, padding: "0 3px", color: oCol(o),
-            fontFamily: FONT_UI, fontWeight: 900, lineHeight: 1.4
+            fontFamily: FONT_UI, fontWeight: 900, lineHeight: 1.4,
+            display: "inline-flex", alignItems: "center"
           }}>
-            {o === "light" ? "△" : o === "dark" ? "▽" : "✡"}</span>}
+            {o === "light" ? "△" : o === "dark" ? "▽" : <span style={{ fontSize: "1.3em", lineHeight: 1 }}>✡</span>}</span>}
           {!noRar && card.rarity && (sz || 80) >= 80 && !fill && <span style={{
             position: "absolute", top: 2, right: 2, fontSize: fs,
             color: RC[card.rarity], fontFamily: FONT_UI, fontWeight: 900,
@@ -208,13 +235,13 @@ function Flash({ flash }) {
         {isBattle ? (<>
           <div style={{ textAlign: "center" }}>
             <div style={{
-              width: 240, height: 240, borderRadius: 4, border: `2px solid ${flash.atkWon ? T.bless : T.curse}`,
+              width: 240, height: 240, borderRadius: 4, border: `2px solid ${flash.tie ? T.textDim : flash.atkWon ? T.bless : T.curse}`,
               background: `url(${flash.atkCard.image}) center/cover`, transition: "all .6s",
-              animation: flash.atkWon ? "none" : "battleLoseL 1.8s ease-in forwards", animationDelay: "0.8s",
+              animation: flash.tie ? "battleTie 0.9s ease-in forwards" : flash.atkWon ? "none" : "battleLoseL 1.8s ease-in forwards", animationDelay: "0.8s",
               opacity: 1
             }} />
             <div style={{
-              fontSize: 8, fontFamily: FONT_UI, fontWeight: 800, color: flash.atkWon ? T.silverBright : T.textDim,
+              fontSize: 8, fontFamily: FONT_UI, fontWeight: 800, color: flash.tie ? T.textDim : flash.atkWon ? T.silverBright : T.textDim,
               marginTop: 4
             }}>{flash.atkCard.name || "Attacker"}</div>
           </div>
@@ -224,17 +251,16 @@ function Flash({ flash }) {
               fontSize: 9, fontFamily: FONT_UI, fontWeight: 900, letterSpacing: 2,
               color: flash.color || T.silverBright, textTransform: "uppercase"
             }}>{flash.text}</div>
-            {flash.sub && <div style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI }}>{flash.sub}</div>}
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{
-              width: 240, height: 240, borderRadius: 4, border: `2px solid ${!flash.atkWon ? T.bless : T.curse}`,
+              width: 240, height: 240, borderRadius: 4, border: `2px solid ${flash.tie ? T.textDim : !flash.atkWon ? T.bless : T.curse}`,
               background: `url(${flash.defCard.image}) center/cover`, transition: "all .6s",
-              animation: !flash.atkWon ? "none" : "battleLoseR 1.8s ease-in forwards", animationDelay: "0.8s",
+              animation: flash.tie ? "battleTie 0.9s ease-in forwards" : !flash.atkWon ? "none" : "battleLoseR 1.8s ease-in forwards", animationDelay: "0.8s",
               opacity: 1
             }} />
             <div style={{
-              fontSize: 8, fontFamily: FONT_UI, fontWeight: 800, color: !flash.atkWon ? T.silverBright : T.textDim,
+              fontSize: 8, fontFamily: FONT_UI, fontWeight: 800, color: flash.tie ? T.textDim : !flash.atkWon ? T.silverBright : T.textDim,
               marginTop: 4
             }}>{flash.defCard.name || "Defender"}</div>
           </div>
@@ -309,6 +335,18 @@ function CDisp({ value, label }) {
   );
 }
 
+const CAMPAIGN_SET_IDS = ["set_a", "set_c", "set_d", "set_g", "set_l", "set_q", "set_r", "set_s", "set_u", "set_w", "set_x", "set_z"];
+const CARD_RENDER_CAP = 500;
+const TYPE_PREFIX = { entity: "ENT", blessing: "BLE", curse: "CUR", equip: "EQU", terrain: "TER" };
+function computeStartCounters(existingCards) {
+  const r = {};
+  for (const [type, prefix] of Object.entries(TYPE_PREFIX)) {
+    const nums = existingCards.filter(c => c.id.startsWith(prefix + "-")).map(c => parseInt(c.id.slice(prefix.length + 1)) || 0);
+    r[type] = (nums.length ? Math.max(...nums) : 0) + 1;
+  }
+  return r;
+}
+
 // Main
 export default function Trinity() {
   const [tab, setTab] = useState("play");
@@ -331,6 +369,7 @@ export default function Trinity() {
   const [dbR, setDbR] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tokens, setTokens] = useState(TOKENS_START);
+  const [tokenFlash, setTokenFlash] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [muted, setMuted] = useState(false);
 
@@ -346,7 +385,7 @@ export default function Trinity() {
 
   const playSfx = useCallback((type, fromRemote = false) => {
     if (!audioEnabled || muted) return;
-    
+
     let url = "";
     if (type === "summon" || type === "action") url = "/audio/action.mp3";
     else if (type === "judgment") url = "/audio/play.mp3";
@@ -354,6 +393,7 @@ export default function Trinity() {
     else if (type === "revenance") url = "/audio/revenance.mp3";
     else if (type === "revenance-pos") url = "/audio/positive.mp3";
     else if (type === "revenance-neg") url = "/audio/negative.mp3";
+    else if (type === "pack") url = "/audio/play.mp3";
     else if (type === "diffuse") url = "/audio/trap-diffuse.mp3";
     else if (type.startsWith("battle-")) url = `/audio/${type}.mp3`;
     else if (type === "draw") {
@@ -363,7 +403,7 @@ export default function Trinity() {
     if (url) {
       const a = new Audio(url);
       a.volume = 0.4;
-      a.play().catch(() => {});
+      a.play().catch(() => { });
     }
 
     if (mMode && ws.current?.readyState === WebSocket.OPEN && !fromRemote) {
@@ -375,17 +415,17 @@ export default function Trinity() {
   }, [audioEnabled, muted, mMode]);
 
   const [flash, setFlash] = useState(null); const fQ = useRef([]); const fB = useRef(false);
-  const enqF = useCallback((text, opts = {}) => { 
-    fQ.current.push({ text, ...opts }); 
-    if (!fB.current) drF(); 
-    
+  const enqF = useCallback((text, opts = {}) => {
+    fQ.current.push({ text, ...opts });
+    if (!fB.current) drF();
+
     if (mMode && ws.current?.readyState === WebSocket.OPEN && !opts.fromRemote) {
       // Do not broadcast local-only or private animations, but DO broadcast battle logic and game-ending states
       if (!["DRAW", "SET", "SUMMON", "TERRAIN", "EQUIP"].includes(text)) {
-        ws.current.send(JSON.stringify({ 
-          type: "sync_anim", 
-          flash: { text, opts: { ...opts, fromRemote: true } }, 
-          sender: mRoleRef.current 
+        ws.current.send(JSON.stringify({
+          type: "sync_anim",
+          flash: { text, opts: { ...opts, fromRemote: true } },
+          sender: mRoleRef.current
         }));
       }
     }
@@ -411,6 +451,7 @@ export default function Trinity() {
   const [log, setLog] = useState([]); const logRef = useRef(null); const [aiR, setAiR] = useState(false);
   const [pit, setPit] = useState({ player: [], ai: [] }); const [showPit, setShowPit] = useState(false);
   const [recentPit, setRecentPit] = useState([]);
+  const [freeDraw, setFreeDraw] = useState(false);
   const [inspCell, setInspCell] = useState(null);
 
   const [nc, setNc] = useState({
@@ -429,12 +470,29 @@ export default function Trinity() {
   const [genMode, setGenMode] = useState("random"); // "random" or "permute"
   const [genImages, setGenImages] = useState({}); // { rowIndex: dataUrl }
   const dragRef = useRef(null); // for drag-swap in forge table
+  const randSetColor = () => "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
   const [gen, setGen] = useState({
     name: "New Set", total: 20,
+    color: "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0"),
     pctEntity: 50, pctBless: 15, pctCurse: 15, pctTerrain: 10, pctItem: 10,
     powerMin: 2, powerMax: 6,
     blessPwrMin: 1, blessPwrMax: 3, cursePwrMin: 1, cursePwrMax: 3,
     rarCommon: 64, rarUncommon: 24, rarRare: 8, rarLegendary: 4,
+  });
+  const [camGen, setCamGen] = useState({
+    cardsPerSet: 330,
+    distMode: "bell",
+    bellSpread: 60,
+    startPowerMin: 0, startPowerMax: 3,
+    endPowerMin: 1, endPowerMax: 9,
+    pctEntity: 55, pctBless: 15, pctCurse: 15, pctTerrain: 5, pctItem: 10,
+    startBlessPwrMin: 1, startBlessPwrMax: 3, endBlessPwrMin: 1, endBlessPwrMax: 5,
+    startCursePwrMin: 1, startCursePwrMax: 3, endCursePwrMin: 1, endCursePwrMax: 5,
+    startEquipPwrMin: 1, startEquipPwrMax: 3, endEquipPwrMin: 1, endEquipPwrMax: 5,
+    startTerrPwrMin: 1, startTerrPwrMax: 3, endTerrPwrMin: 1, endTerrPwrMax: 5,
+    startRarCommon: 75, startRarUncommon: 18, startRarRare: 5, startRarLegendary: 2,
+    endRarCommon: 50, endRarUncommon: 38, endRarRare: 20, endRarLegendary: 2,
+    ensureTypes: true,
   });
 
   useEffect(() => {
@@ -449,7 +507,7 @@ export default function Trinity() {
       const host = window.location.hostname || "localhost";
       const wsUrl = `${protocol}//${host}:4000/game-ws`;
       console.log("[Multiplayer] Connecting to:", wsUrl, "(attempt", attempt + 1, ")");
-      
+
       socket = new WebSocket(wsUrl);
       ws.current = socket;
 
@@ -573,12 +631,12 @@ export default function Trinity() {
         else if (type === "blessing") { pwr = blessPwrMin + Math.floor(sR() * (blessPwrMax - blessPwrMin + 1)); }
         else if (type === "curse") { pwr = cursePwrMin + Math.floor(sR() * (cursePwrMax - cursePwrMin + 1)); }
         else if (type === "terrain") { const v = [0, 0, 0]; v[Math.floor(sR() * 3)] = sR() > .5 ? 1 : -1; v[(Math.floor(sR() * 3) + 1) % 3] = sR() > .5 ? 1 : -1; s = v[0]; m = v[1]; w = v[2]; }
-        else if (type === "equip") { 
-          const v = [0, 0, 0]; 
-          const mag = 1 + Math.floor(sR() * 3); 
+        else if (type === "equip") {
+          const v = [0, 0, 0];
+          const mag = 1 + Math.floor(sR() * 3);
           const sign = sR() > 0.5 ? 1 : -1;
-          v[Math.floor(sR() * 3)] = mag * sign; 
-          s = v[0]; m = v[1]; w = v[2]; 
+          v[Math.floor(sR() * 3)] = mag * sign;
+          s = v[0]; m = v[1]; w = v[2];
         }
         rows.push({ type, soul: s, mind: m, will: w, rarity: "common", power: pwr, id: i });
       }
@@ -636,6 +694,89 @@ export default function Trinity() {
     return rows;
   }, [gen, genMode]);
 
+  const campaignPreview = useMemo(() => {
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const n = CAMPAIGN_SET_IDS.length;
+    // Per-set card count distribution
+    const total = camGen.cardsPerSet * n;
+    let setCounts;
+    if (camGen.distMode === "bell") {
+      const center = (n - 1) / 2;
+      const sigma = Math.max(0.5, (n / 2) * (camGen.bellSpread / 100));
+      const weights = Array.from({ length: n }, (_, i) => Math.exp(-0.5 * ((i - center) / sigma) ** 2));
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[Math.floor(n / 2)] = Math.max(1, (setCounts[Math.floor(n / 2)] || 1) + diff);
+    } else if (camGen.distMode === "ramp") {
+      const weights = Array.from({ length: n }, (_, i) => i + 1);
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[n - 1] = Math.max(1, setCounts[n - 1] + diff);
+    } else if (camGen.distMode === "ramp_inv") {
+      const weights = Array.from({ length: n }, (_, i) => n - i);
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[0] = Math.max(1, setCounts[0] + diff);
+    } else {
+      setCounts = Array(n).fill(camGen.cardsPerSet);
+    }
+    return CAMPAIGN_SET_IDS.map((setId, si) => {
+      const t = si / (n - 1);
+      const powerMin = Math.round(lerp(camGen.startPowerMin, camGen.endPowerMin, t));
+      const powerMax = Math.max(powerMin, Math.round(lerp(camGen.startPowerMax, camGen.endPowerMax, t)));
+      const blessPwrMin = Math.round(lerp(camGen.startBlessPwrMin, camGen.endBlessPwrMin, t));
+      const blessPwrMax = Math.max(blessPwrMin, Math.round(lerp(camGen.startBlessPwrMax, camGen.endBlessPwrMax, t)));
+      const cursePwrMin = Math.round(lerp(camGen.startCursePwrMin, camGen.endCursePwrMin, t));
+      const cursePwrMax = Math.max(cursePwrMin, Math.round(lerp(camGen.startCursePwrMax, camGen.endCursePwrMax, t)));
+      const equipPwrMin = Math.round(lerp(camGen.startEquipPwrMin, camGen.endEquipPwrMin, t));
+      const equipPwrMax = Math.max(equipPwrMin, Math.round(lerp(camGen.startEquipPwrMax, camGen.endEquipPwrMax, t)));
+      const terrPwrMin = Math.round(lerp(camGen.startTerrPwrMin, camGen.endTerrPwrMin, t));
+      const terrPwrMax = Math.max(terrPwrMin, Math.round(lerp(camGen.startTerrPwrMax, camGen.endTerrPwrMax, t)));
+      const rarCommon = Math.round(lerp(camGen.startRarCommon, camGen.endRarCommon, t));
+      const rarUncommon = Math.round(lerp(camGen.startRarUncommon, camGen.endRarUncommon, t));
+      const rarRare = Math.round(lerp(camGen.startRarRare, camGen.endRarRare, t));
+      const rarLegendary = Math.round(lerp(camGen.startRarLegendary, camGen.endRarLegendary, t));
+      return { setId, si, t, cards: setCounts[si], powerMin, powerMax, blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax, equipPwrMin, equipPwrMax, terrPwrMin, terrPwrMax, rarCommon, rarUncommon, rarRare, rarLegendary };
+    });
+  }, [camGen]);
+
+  // O(1) lookups — rebuilt only when cardPool or sets change
+  const cardMap = useMemo(() => new Map(cardPool.map(c => [c.id, c])), [cardPool]);
+  const cardSetMap = useMemo(() => {
+    const m = new Map();
+    sets.forEach(s => s.cardIds.forEach(id => m.set(id, s.name)));
+    return m;
+  }, [sets]);
+
+  // Pre-filtered lists so tab switches don't re-run heavy chains
+  const browseFiltered = useMemo(() =>
+    cardPool.filter(c =>
+      (bF === "all" || c.type === bF) &&
+      (bSetF === "all" || cardSetMap.get(c.id) === bSetF)
+    ), [cardPool, cardSetMap, bF, bSetF]);
+
+  const editorFiltered = useMemo(() => {
+    const sortFns = {
+      id: (a, b) => a.id.localeCompare(b.id),
+      name: (a, b) => (a.name || "").localeCompare(b.name || ""),
+      type: (a, b) => a.type.localeCompare(b.type),
+      rarity: (a, b) => RO.indexOf(a.rarity) - RO.indexOf(b.rarity),
+      power: (a, b) => cPwr(b) - cPwr(a),
+      noart: (a, b) => (a.image ? 1 : 0) - (b.image ? 1 : 0),
+    };
+    return cardPool
+      .filter(c => edF.set === "all" || cardSetMap.get(c.id) === edF.set)
+      .filter(c => edF.type === "all" || c.type === edF.type)
+      .filter(c => edF.rarity === "all" || c.rarity === edF.rarity)
+      .filter(c => edF.art === "all" || (edF.art === "noart" ? !c.image : !!c.image))
+      .sort(sortFns[edF.sort] || sortFns.id);
+  }, [cardPool, cardSetMap, edF]);
+
+  const ownedCardPool = useMemo(() => cardPool.filter(c => (coll[c.id] || 0) > 0), [cardPool, coll]);
+
   const addLog = useCallback(m => setLog(p => [...p.slice(-60), m]), []);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
 
@@ -691,6 +832,8 @@ export default function Trinity() {
   useEffect(() => {
     const s = document.createElement("style"); s.textContent = `
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    @keyframes subtlePulse{0%,100%{opacity:1}50%{opacity:.78}}
+    @keyframes tokenGold{0%{color:inherit}30%{color:#c9a84c;text-shadow:0 0 8px #c9a84c88}100%{color:inherit}}
     @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
     @keyframes glow{0%,100%{box-shadow:0 0 4px #a8a8b822}50%{box-shadow:0 0 10px #a8a8b844}}
     @keyframes flashAnim{0%{opacity:0;transform:scale(.9)}10%{opacity:1;transform:scale(1.02)}20%{transform:scale(1)}85%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
@@ -709,7 +852,7 @@ export default function Trinity() {
     input[type=range]{height:3px}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#a8a8b8;cursor:pointer}
   `; document.head.appendChild(s); return () => document.head.removeChild(s);
   }, []);
-  
+
   const handleKeys = useCallback((e) => {
     if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
     if ((tab !== "play" && tab !== "duel") || !game || game.ph !== "playing" || aiR) return;
@@ -807,15 +950,15 @@ export default function Trinity() {
     // Handle Defusal: If the mover LANDED on an opponent's trap
     const landCell = g.bd[r][c];
     if (landCell && landCell.fd && landCell.ow === opp && (landCell.cd.type === "blessing" || landCell.cd.type === "curse")) {
-        playSfx("diffuse");
-        enqF("TRAP DEFUSED", { color: T.textDim, border: T.silverDim, icon: "⊘", sub: `Opp ${landCell.cd.name || "Trap"}` });
-        addLog(`⊘ Trap Defused: ${landCell.cd.name || "Trap"}`);
-        toPit(landCell.cd, opp);
-        // The mover's entity will overwrite this cell anyway in the calling function,
-        // but we clear it here for clarity or in case calling function doesn't overwrite it immediately.
-        g.bd[r][c] = null;
+      playSfx("diffuse");
+      enqF("TRAP DEFUSED", { color: T.textDim, border: T.silverDim, icon: "⊘", sub: `Opp ${landCell.cd.name || "Trap"}` });
+      addLog(`⊘ Trap Defused: ${landCell.cd.name || "Trap"}`);
+      toPit(landCell.cd, opp);
+      // The mover's entity will overwrite this cell anyway in the calling function,
+      // but we clear it here for clarity or in case calling function doesn't overwrite it immediately.
+      g.bd[r][c] = null;
     }
-}
+  }
   function flipSets(g, ow) {
     // Decrement priming for the current player's traps
     for (let r = 0; r < 5; r++) {
@@ -884,7 +1027,7 @@ export default function Trinity() {
     return game.turn === curR;
   }, [game, curR]);
   function clr() { setSelH(null); setSelB(null); setHl([]); setMode(null); setTapTgt(null); setInspCell(null); }
-  function forfeit() { 
+  function forfeit() {
     if (mMode) {
       ws.current.send(JSON.stringify({ type: "reset" }));
     }
@@ -900,16 +1043,17 @@ export default function Trinity() {
     if (!deck.length) return;
 
     playSfx("draw");
-    const g = { ...game, 
-      [mdk]: [...game[mdk]], 
+    const g = {
+      ...game,
+      [mdk]: [...game[mdk]],
       [mhk]: [...game[mhk]],
       act: game.act - 1
     };
-    
+
     const c = g[mdk].shift(); g[mhk].push(c);
     enqF("DRAW", { color: T.silver, border: T.silverDim, image: c.image, sub: c.name || "Card" });
     addLog(`Draw: ${c.name || "Card"}`);
-    
+
     updateGame(g); clr();
   }
   function selectHand(idx) {
@@ -917,14 +1061,14 @@ export default function Trinity() {
     if (!game || game.turn !== mr || game.act <= 0 || game.ph !== "playing") return;
     const mhk = mr === "player" ? "pH" : "aH";
     const c = game[mhk][idx]; setSelH(idx); setSelB(null);
-    if (c.type === "entity") { 
-      const cells = []; 
+    if (c.type === "entity") {
+      const cells = [];
       if (mr === "player") {
-        for (let r = 3; r < 5; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]); 
+        for (let r = 3; r < 5; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]);
       } else {
-        for (let r = 0; r < 2; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]); 
+        for (let r = 0; r < 2; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]);
       }
-      setHl(cells); setMode("summon"); 
+      setHl(cells); setMode("summon");
     }
     else if (c.type === "blessing" || c.type === "curse") { setHl([]); setMode(c.type); }
     else if (c.type === "terrain") {
@@ -935,21 +1079,21 @@ export default function Trinity() {
       }
       setHl(cells); setMode("terrain");
     }
-    else if (c.type === "equip") { 
-      const cells = []; 
-      for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) { 
-        const cl = game.bd[r][col]; 
-        if (cl?.ow === mr && cl.cd.type === "entity") cells.push([r, col]); 
-      } 
-      setHl(cells); setMode("equip"); 
+    else if (c.type === "equip") {
+      const cells = [];
+      for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) {
+        const cl = game.bd[r][col];
+        if (cl?.ow === mr && cl.cd.type === "entity") cells.push([r, col]);
+      }
+      setHl(cells); setMode("equip");
     }
   }
   function playBC(type) {
-    if (!game || selH === null) return; 
+    if (!game || selH === null) return;
     const mr = curR;
     const mhk = mr === "player" ? "pH" : "aH";
     const c = game[mhk][selH]; const cost = game.c === 0 ? 0 : 1;
-    if (game.act < cost) return; 
+    if (game.act < cost) return;
     const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(r => [...r]) };
     g[mhk].splice(selH, 1); g.act -= cost;
     playSfx("action");
@@ -957,6 +1101,22 @@ export default function Trinity() {
     if (type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: c.image, video: c.video }); applyC(g, pwr); addLog(`Play: ${c.name || "Blessing"} (+${pwr}C)`); }
     else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: c.image, video: c.video }); applyC(g, -pwr); addLog(`Play: ${c.name || "Curse"} (−${pwr}C)`); }
     toPit(c, mr); updateGame(g); clr();
+    if (pwr === 1) setFreeDraw(true);
+  }
+  function doFreeDraw() {
+    if (!game || !freeDraw) return;
+    const mr = curR;
+    const mdk = mr === "player" ? "pD" : "aD";
+    const mhk = mr === "player" ? "pH" : "aH";
+    if (!game[mdk].length) { setFreeDraw(false); return; }
+    const g = { ...game, [mdk]: [...game[mdk]], [mhk]: [...game[mhk]] };
+    const drawn = g[mdk].shift();
+    g[mhk].push(drawn);
+    playSfx("draw");
+    enqF("DRAW", { color: T.silver, border: T.silverDim, image: drawn.image, sub: drawn.name || "Card" });
+    addLog(`Draw: ${drawn.name || "Card"} (free)`);
+    setFreeDraw(false);
+    updateGame(g);
   }
   function doSetTrap() {
     if (!game || selH === null) return;
@@ -968,7 +1128,7 @@ export default function Trinity() {
     const or = mr === "player" ? "ai" : "player";
     const r = (mr === "ai") ? 4 - vr : vr;
     const c = (mr === "ai") ? 4 - vc : vc;
-    
+
     if (!game || game.turn !== mr || game.ph !== "playing" || (mr === "player" && aiR)) return;
     const mhk = mr === "player" ? "pH" : "aH";
     const isH = hl.some(([hr, hc]) => hr === r && hc === c);
@@ -1025,7 +1185,7 @@ export default function Trinity() {
 
     if (cell?.ow === mr && cell.cd.type === "entity" && !cell.fd && mode !== "chooseStat") {
       setSelB([r, c]); setSelH(null); setInspCell([r, c]); const isT = aura(cell.cd) === 0;
-      const a = adj(r, c, isT ? 2 : 1);
+      const a = adj(r, c, isT ? 2 : 1).filter(([tr, tc]) => canReach(r, c, tr, tc, game.bd));
       setHl([...a.filter(([ar, ac]) => !game.bd[ar][ac] || game.bd[ar][ac]?.fd), ...a.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === or && t.cd.type === "entity" && !t.fd; })]);
       setMode("moveOrTap"); return;
     }
@@ -1050,7 +1210,7 @@ export default function Trinity() {
     if (!game || !selB || !tapTgt) return; const [ar, ac] = selB; const [dr, dc] = tapTgt;
     const atk = game.bd[ar][ac]; const def = game.bd[dr][dc]; if (!atk || !def) return;
     const aS = getEff(atk.cd, game.bd, ar, ac, atk.ib); const dS = getEff(def.cd, game.bd, dr, dc, def.ib);
-    const result = resolveCombat(aS, dS, stat); 
+    const result = resolveCombat(aS, dS, stat);
     const g = { ...game, bd: game.bd.map(row => [...row]) }; g.act--;
     const battleOpts = { atkCard: atk.cd, defCard: def.cd, sub: `${stat.toUpperCase()} |${aS[stat]}| vs |${dS[stat]}|` };
     const aVal = Math.abs(aS[stat]); const dVal = Math.abs(dS[stat]);
@@ -1064,10 +1224,12 @@ export default function Trinity() {
       g.bd[ar][ac] = null; toPit(atk.cd, "player");
       combatC(g, result.dmg, result.winningStat, "ai", battleOpts, atk.cd, def.cd, false,
         `⚔ ${atk.cd.name || "Atk"} |${aVal}| < ${def.cd.name || "Def"} |${dVal}|`, stat);
-    } else { 
+    } else {
+      g.bd[ar][ac] = null; g.bd[dr][dc] = null;
+      toPit(atk.cd, "player"); toPit(def.cd, "ai");
       playSfx(`battle-${stat[0]}`);
-      enqF("TIE", { color: T.textDim, border: T.textDim, ...battleOpts }); 
-      addLog(`⚔ ${atk.cd.name || "Atk"} |${aVal}| = ${def.cd.name || "Def"} |${dVal}| (Tie)`); 
+      enqF("MUTUAL DESTRUCTION", { color: T.textDim, border: T.textDim, ...battleOpts, tie: true });
+      addLog(`⚔ ${atk.cd.name || "Atk"} |${aVal}| = ${def.cd.name || "Def"} |${dVal}| (Mutual Destruction)`);
     }
     updateGame(g); clr();
   }
@@ -1075,18 +1237,19 @@ export default function Trinity() {
     if (!game || !isMyTurn() || aiR) return;
     const g = { ...game, bd: game.bd.map(r => [...r]), aH: [...game.aH], aD: [...game.aD], pH: [...game.pH], pD: [...game.pD] };
     const nextTurn = game.turn === "player" ? "ai" : "player";
-    
-    g.turn = nextTurn; g.act = 3; g.flips = 0; 
-    
+
+    g.turn = nextTurn; g.act = 3; g.flips = 0;
+
     // Auto-draw for next player (logic shared for now)
     const nextDeck = nextTurn === "player" ? g.pD : g.aD;
     const nextHand = nextTurn === "player" ? g.pH : g.aH;
     if (nextDeck.length) { nextHand.push(nextDeck.shift()); playSfx("draw"); }
-    
+
     flipSets(g, nextTurn); g.tn++;
-    
+    setFreeDraw(false);
+
     if (mMode) {
-      updateGame(g); clr(); 
+      updateGame(g); clr();
       addLog(`— ${nextTurn === curR ? "Your" : "Opp"} Turn —`);
     } else {
       setGame(g); clr(); addLog("— Opp —"); setAiR(true); setTimeout(() => runAI(g, 0), 500 + Math.random() * 1500);
@@ -1115,16 +1278,17 @@ export default function Trinity() {
         s.aH.splice(s.aH.indexOf(sp), 1); s.act--; playSfx("action");
         if (sp.type === "blessing") { enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image }); applyC(s, cPwr(sp)); }
         else { enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image }); applyC(s, -cPwr(sp)); }
+        if (cPwr(sp) === 1 && s.aD.length) { const d = s.aD.shift(); s.aH.push(d); addLog(`Opp Draw (free)`); }
         toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`); setGame({ ...s }); delay(); return;
       }
     }
-    
+
     // --- 2. BOARD ATTACK ---
     let bestAtk = null, maxD = -999;
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
       const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
       const range = aura(cl.cd) === 0 ? 2 : 1;
-      for (const [tr, tc] of adj(r, c, range)) {
+      for (const [tr, tc] of adj(r, c, range).filter(([tr, tc]) => canReach(r, c, tr, tc, s.bd))) {
         const tg = s.bd[tr][tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
         const aS = getEff(cl.cd, s.bd, r, c, cl.ib), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
         STAT_DEFS.forEach(st => {
@@ -1286,10 +1450,11 @@ export default function Trinity() {
   }
   function ripPack(setObj) {
     if (tokens < PACK_COST) return;
+    playSfx("pack");
     const sc = cardPool.filter(c => setObj.cardIds.includes(c.id)); if (!sc.length) return;
     setTokens(t => t - PACK_COST);
     const pack = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < CARDS_PER_PACK; i++) {
       let totalW = 0; for (const c of sc) totalW += c.weight || 100;
       let roll = Math.random() * totalW; let pick = sc[0];
       for (const c of sc) { roll -= (c.weight || 100); if (roll <= 0) { pick = c; break; } }
@@ -1297,46 +1462,52 @@ export default function Trinity() {
     }
     setColl(prev => { const n = { ...prev }; pack.forEach(c => { n[c.id] = (n[c.id] || 0) + 1; }); return n; });
     setPackRes(pack); setPackFlip(pack.map(() => false)); setPackSp(pack.map(c => c.rarity === "legendary"));
-    enqF("PACK OPENED", { color: T.silverBright, border: T.silver, icon: "◈" });
+    setTokenFlash(true); setTimeout(() => setTokenFlash(false), 700);
   }
 
-  // ═══ SET GENERATOR ═══
-  function generateSet() {
-    const { name, total, pctEntity, pctBless, pctCurse, pctTerrain, pctItem,
-      powerMin, powerMax, blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax,
-      rarCommon, rarUncommon, rarRare, rarLegendary } = gen;
-    const ts = Date.now(); const newCards = [];
+  // ═══ CARD GENERATION HELPER (pure — no state reads) ═══
+  function genCardsForParams({ name, total, powerMin, powerMax,
+    pctEntity, pctBless, pctCurse, pctTerrain, pctItem,
+    blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax,
+    equipPwrMin = 1, equipPwrMax = 3, terrPwrMin = 1, terrPwrMax = 3,
+    rarCommon, rarUncommon, rarRare, rarLegendary,
+    ensureTypes, images = {}, mode = "random", ts: tsIn, counters = {} }) {
+    const ts = tsIn !== undefined ? tsIn : Date.now();
+    const newCards = [];
     const rarPower = {
       common: [powerMin, Math.min(powerMin + 2, powerMax)],
       uncommon: [Math.max(powerMin, Math.floor((powerMin + powerMax) / 2) - 1), Math.min(Math.floor((powerMin + powerMax) / 2) + 1, powerMax)],
       rare: [Math.max(powerMin + 1, powerMax - 2), powerMax], legendary: [Math.max(powerMin + 2, powerMax - 1), powerMax]
     };
-    function pickRarity() { const r = Math.random() * 100; return r < rarCommon ? "common" : r < rarCommon + rarUncommon ? "uncommon" : r < rarCommon + rarUncommon + rarRare ? "rare" : "legendary"; }
     function allPerms(pMin, pMax) {
       const p = [];
       for (let s = -STAT_MAX; s <= STAT_MAX; s++) for (let m = -STAT_MAX; m <= STAT_MAX; m++) for (let w = -STAT_MAX; w <= STAT_MAX; w++) { if (Math.abs(s) + Math.abs(m) + Math.abs(w) >= pMin && Math.abs(s) + Math.abs(m) + Math.abs(w) <= pMax) p.push({ soul: s, mind: m, will: w }); }
       return p;
     }
-    function randStatForRarity(rar) {
-      const [pMin, pMax] = rarPower[rar];
+    function randStats(pMin, pMax) {
       for (let a = 0; a < 100; a++) {
         const s = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX, m = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX, w = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX;
         if (Math.abs(s) + Math.abs(m) + Math.abs(w) >= pMin && Math.abs(s) + Math.abs(m) + Math.abs(w) <= pMax) return { soul: s, mind: m, will: w };
       } return { soul: 1, mind: 1, will: 0 };
     }
+    function randStatForRarity(rar) { const [pMin, pMax] = rarPower[rar]; return randStats(pMin, pMax); }
     function gradFor(type, o) {
       const h = type === "blessing" ? 210 : type === "curse" ? 350 : type === "terrain" ? 80 : type === "equip" ? 30 : o > 0 ? 40 : o < 0 ? 280 : 170;
       const sat = type === "entity" ? 20 : 15, b = 18 + Math.floor(Math.random() * 22);
       return [`hsl(${h},${sat + Math.floor(Math.random() * 10)}%,${b}%)`, `hsl(${h},${sat}%,${Math.floor(b / 2)}%)`];
     }
     function rPwr(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+    function nextCardId(type) {
+      if (!counters[type]) counters[type] = 1;
+      return `${TYPE_PREFIX[type] || "GEN"}-${String(counters[type]++).padStart(5, "0")}`;
+    }
 
     const counts = {
       entity: Math.round(total * pctEntity / 100), blessing: Math.round(total * pctBless / 100),
       curse: Math.round(total * pctCurse / 100), terrain: Math.round(total * pctTerrain / 100), equip: Math.round(total * pctItem / 100)
     };
     counts.entity += total - Object.values(counts).reduce((a, b) => a + b, 0);
-    const perms = genMode === "permute" ? shuffle([...allPerms(powerMin, powerMax)]) : null;
+    const perms = mode === "permute" ? shuffle([...allPerms(powerMin, powerMax)]) : null;
     let pIdx = 0;
 
     for (const [type, count] of Object.entries(counts)) {
@@ -1345,16 +1516,10 @@ export default function Trinity() {
         if (type === "entity") { stats = perms ? perms[pIdx++ % perms.length] : randStatForRarity("common"); }
         else if (type === "blessing") { stats = { soul: 0, mind: 0, will: 0 }; pwr = rPwr(blessPwrMin, blessPwrMax); }
         else if (type === "curse") { stats = { soul: 0, mind: 0, will: 0 }; pwr = rPwr(cursePwrMin, cursePwrMax); }
-        else if (type === "terrain") { const v = [0, 0, 0]; v[Math.floor(Math.random() * 3)] = Math.random() > .5 ? 1 : -1; v[(Math.floor(Math.random() * 3) + 1) % 3] = Math.random() > .5 ? 1 : -1; stats = { soul: v[0], mind: v[1], will: v[2] }; }
-        else { 
-          const v = [0, 0, 0]; 
-          const mag = 1 + Math.floor(Math.random() * 3); 
-          const sign = Math.random() > 0.5 ? 1 : -1;
-          v[Math.floor(Math.random() * 3)] = mag * sign; 
-          stats = { soul: v[0], mind: v[1], will: v[2] }; 
-        }
+        else if (type === "terrain") { stats = randStats(terrPwrMin, terrPwrMax); }
+        else { stats = randStats(equipPwrMin, equipPwrMax); }
         const card = {
-          id: `gen_${ts}_${type[0]}${i}_${Math.random().toString(36).slice(2, 7)}`, name: "", type, ...stats,
+          id: nextCardId(type), name: "", type, ...stats,
           rarity: "common", set: name, weight: 100, image: null
         };
         if (pwr) card.power = pwr;
@@ -1367,21 +1532,17 @@ export default function Trinity() {
     newCards.sort((a, b) => getP(b) - getP(a));
     const totalW = rarCommon + rarUncommon + rarRare + rarLegendary;
     const assignedIds = new Set();
-    const rarities = ["legendary", "rare", "uncommon"];
-
-    rarities.forEach(rar => {
-      const rarKey = rar === "legendary" ? "rarLegendary" : rar === "rare" ? "rarRare" : "rarUncommon";
-      const targetCount = Math.round(total * gen[rarKey] / totalW);
+    ["legendary", "rare", "uncommon"].forEach(rar => {
+      const rarW = rar === "legendary" ? rarLegendary : rar === "rare" ? rarRare : rarUncommon;
+      const targetCount = Math.round(total * rarW / totalW);
       let rarAssigned = 0;
-
-      if (gen.ensureTypes) {
+      if (ensureTypes) {
         for (const t of ["entity", "blessing", "curse", "terrain", "equip"]) {
           if (rarAssigned >= targetCount) break;
           const card = newCards.find(c => !assignedIds.has(c.id) && c.type === t);
           if (card) { card.rarity = rar; assignedIds.add(card.id); rarAssigned++; }
         }
       }
-
       if (rar === "legendary") {
         const pols = ["light", "dark", "balanced"]; let polIdx = 0;
         for (const card of newCards) {
@@ -1393,29 +1554,111 @@ export default function Trinity() {
           }
         }
       }
-
       for (const card of newCards) {
         if (rarAssigned >= targetCount || assignedIds.has(card.id)) continue;
         card.rarity = rar; assignedIds.add(card.id); rarAssigned++;
       }
     });
-
     newCards.forEach(card => { if (!assignedIds.has(card.id)) card.rarity = "common"; });
 
-    // Assign images from forge table + gradients as fallback
+    // Assign images/gradients
     newCards.forEach((card, ci) => {
-      if (genImages[ci]) { card.image = genImages[ci]; }
-      else {
-        card.gradient = card.type === "entity"
-          ? gradFor(card.type, card.soul + card.mind + card.will)
-          : DG[card.type] || DG.entity;
-      }
+      if (images[ci]) { card.image = images[ci]; }
+      else { card.gradient = card.type === "entity" ? gradFor(card.type, card.soul + card.mind + card.will) : DG[card.type] || DG.entity; }
+    });
+    return newCards;
+  }
+
+  // ═══ SET GENERATOR ═══
+  function generateSet() {
+    const ts = Date.now();
+    const counters = computeStartCounters(cardPool);
+    const newCards = genCardsForParams({ ...gen, images: genImages, mode: genMode, ts, counters });
+    setCardPool(prev => [...prev, ...newCards]);
+    setSets(prev => [...prev, { id: "gen_" + ts, name: gen.name, color: gen.color, cardIds: newCards.map(c => c.id) }]);
+    setGen(p => ({ ...p, color: randSetColor() }));
+    enqF("SET GENERATED", { color: T.silverBright, border: T.silver, icon: "◈", sub: `${newCards.length} cards: ${gen.name}` });
+    return newCards.length;
+  }
+
+  // ═══ CAMPAIGN GENERATOR ═══
+  function generateCampaign() {
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const n = CAMPAIGN_SET_IDS.length;
+    const ts = Date.now();
+    const allNewCards = [];
+    const setCardMap = {};
+    const counters = computeStartCounters(cardPool); // shared across all sets, increments continuously
+    // Compute per-set card counts (mirrors campaignPreview logic)
+    const total = camGen.cardsPerSet * n;
+    let setCounts;
+    if (camGen.distMode === "bell") {
+      const center = (n - 1) / 2;
+      const sigma = Math.max(0.5, (n / 2) * (camGen.bellSpread / 100));
+      const weights = Array.from({ length: n }, (_, i) => Math.exp(-0.5 * ((i - center) / sigma) ** 2));
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[Math.floor(n / 2)] = Math.max(1, setCounts[Math.floor(n / 2)] + diff);
+    } else if (camGen.distMode === "ramp") {
+      const weights = Array.from({ length: n }, (_, i) => i + 1);
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[n - 1] = Math.max(1, setCounts[n - 1] + diff);
+    } else if (camGen.distMode === "ramp_inv") {
+      const weights = Array.from({ length: n }, (_, i) => n - i);
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      setCounts = weights.map(w => Math.max(1, Math.round(w / sumW * total)));
+      const diff = total - setCounts.reduce((a, b) => a + b, 0);
+      setCounts[0] = Math.max(1, setCounts[0] + diff);
+    } else {
+      setCounts = Array(n).fill(camGen.cardsPerSet);
+    }
+
+    const setName = id => id === "core" ? "A" : id.replace("set_", "").toUpperCase();
+    CAMPAIGN_SET_IDS.forEach((setId, si) => {
+      const t = si / (n - 1);
+      const setObj = sets.find(s => s.id === setId) || { id: setId, name: setName(setId), color: "#303030", cardIds: [] };
+      const powerMin = Math.round(lerp(camGen.startPowerMin, camGen.endPowerMin, t));
+      const powerMax = Math.max(powerMin, Math.round(lerp(camGen.startPowerMax, camGen.endPowerMax, t)));
+      const blessPwrMin = Math.round(lerp(camGen.startBlessPwrMin, camGen.endBlessPwrMin, t));
+      const blessPwrMax = Math.max(blessPwrMin, Math.round(lerp(camGen.startBlessPwrMax, camGen.endBlessPwrMax, t)));
+      const cursePwrMin = Math.round(lerp(camGen.startCursePwrMin, camGen.endCursePwrMin, t));
+      const cursePwrMax = Math.max(cursePwrMin, Math.round(lerp(camGen.startCursePwrMax, camGen.endCursePwrMax, t)));
+      const equipPwrMin = Math.round(lerp(camGen.startEquipPwrMin, camGen.endEquipPwrMin, t));
+      const equipPwrMax = Math.max(equipPwrMin, Math.round(lerp(camGen.startEquipPwrMax, camGen.endEquipPwrMax, t)));
+      const terrPwrMin = Math.round(lerp(camGen.startTerrPwrMin, camGen.endTerrPwrMin, t));
+      const terrPwrMax = Math.max(terrPwrMin, Math.round(lerp(camGen.startTerrPwrMax, camGen.endTerrPwrMax, t)));
+      const rarCommon = Math.round(lerp(camGen.startRarCommon, camGen.endRarCommon, t));
+      const rarUncommon = Math.round(lerp(camGen.startRarUncommon, camGen.endRarUncommon, t));
+      const rarRare = Math.round(lerp(camGen.startRarRare, camGen.endRarRare, t));
+      const rarLegendary = Math.round(lerp(camGen.startRarLegendary, camGen.endRarLegendary, t));
+      const newCards = genCardsForParams({
+        name: setObj.name, total: setCounts[si],
+        powerMin, powerMax,
+        pctEntity: camGen.pctEntity, pctBless: camGen.pctBless,
+        pctCurse: camGen.pctCurse, pctTerrain: camGen.pctTerrain, pctItem: camGen.pctItem,
+        blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax,
+        equipPwrMin, equipPwrMax, terrPwrMin, terrPwrMax,
+        rarCommon, rarUncommon, rarRare, rarLegendary,
+        ensureTypes: camGen.ensureTypes, images: {}, mode: "random", ts: ts + si * 1000, counters,
+      });
+      allNewCards.push(...newCards);
+      setCardMap[setId] = newCards.map(c => c.id);
     });
 
-    setCardPool(prev => [...prev, ...newCards]);
-    setSets(prev => [...prev, { id: "gen_" + ts, name, cardIds: newCards.map(c => c.id) }]);
-    enqF("SET GENERATED", { color: T.silverBright, border: T.silver, icon: "◈", sub: `${newCards.length} cards: ${name}` });
-    return newCards.length;
+    const oldIds = new Set(CAMPAIGN_SET_IDS.flatMap(sid => sets.find(s => s.id === sid)?.cardIds || []));
+    setCardPool(prev => [...prev.filter(c => !oldIds.has(c.id)), ...allNewCards]);
+    setSets(prev => {
+      const existingIds = new Set(prev.map(s => s.id));
+      const updated = prev.map(s => CAMPAIGN_SET_IDS.includes(s.id) ? { ...s, cardIds: setCardMap[s.id] || [] } : s);
+      CAMPAIGN_SET_IDS.forEach(sid => {
+        if (!existingIds.has(sid)) updated.push({ id: sid, name: setName(sid), color: "#303030", cardIds: setCardMap[sid] || [] });
+      });
+      return updated;
+    });
+    enqF("CAMPAIGN GENERATED", { color: T.legendary, border: T.legendary + "80", icon: "✦", sub: `${allNewCards.length} cards · ${CAMPAIGN_SET_IDS.length} sets` });
   }
 
   const owned = id => coll[id] || 0;
@@ -1465,7 +1708,7 @@ export default function Trinity() {
 
         {/* Play lobby (Original AI) */}
         {tab === "play" && !game && (
-          <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
+          <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s", zoom: 1.5 }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Trinity</div>
             <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>THE WAR IN HEAVEN</div>
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
@@ -1530,7 +1773,7 @@ export default function Trinity() {
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Duel</div>
             <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
-            
+
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
               {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "p1"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "p2"]].map(([lb, sel, setSel, col, role], sideIdx) => {
                 const isTaken = mTaken.includes(role);
@@ -1580,7 +1823,7 @@ export default function Trinity() {
             </div>
 
             {mOppDeck && <div style={{ marginBottom: 16, fontSize: 9, color: T.silver, fontFamily: FONT_UI }}>Opponent selected: <span style={{ color: T.white }}>{mOppDeck}</span></div>}
-            
+
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <button onClick={startGame} disabled={mWait || !mRole || mRole === "spectator"} style={{
                 padding: "6px 32px", background: "transparent", border: `1.5px solid ${T.silverBright}`, borderRadius: 2,
@@ -1589,7 +1832,7 @@ export default function Trinity() {
               }}>
                 {mWait ? "WAITING..." : "FORGE BATTLE"}
               </button>
-              
+
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: mRole ? T.bless : T.danger }} />
                 <div style={{ fontSize: 8, color: T.silverBright, fontFamily: FONT_UI, letterSpacing: 2 }}>
@@ -1616,18 +1859,18 @@ export default function Trinity() {
                 <div style={{
                   display: "grid", gridTemplateColumns: "repeat(5,1fr)", gridTemplateRows: "repeat(5,1fr)", gap: 2, padding: 2,
                   background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3,
-                  maxHeight: "100%", maxWidth: "100%", height: "100%", aspectRatio: "1/1"
+                  maxHeight: "100%", maxWidth: "100%", height: "100%", aspectRatio: "1/1", position: "relative"
                 }}>
-                  {Array.from({length: 5}).map((_, vr) => Array.from({length: 5}).map((_, vc) => {
+                  {Array.from({ length: 5 }).map((_, vr) => Array.from({ length: 5 }).map((_, vc) => {
                     const mr = curR;
                     const r = (mr === "ai") ? 4 - vr : vr;
                     const c = (mr === "ai") ? 4 - vc : vc;
                     const cell = game.bd[r][c];
                     const h = isH(r, c); const sel = selB && selB[0] === r && selB[1] === c;
-                    
-                    // Zone mapping remains consistent to the visual row for bottom playing 
+
+                    // Zone mapping remains consistent to the visual row for bottom playing
                     const zone = vr < 2 ? `${T.curse}06` : vr > 2 ? `${T.bless}06` : "transparent";
-                    
+
                     return (
                       <div key={`${vr}-${vc}`} onClick={() => boardClick(vr, vc)} style={{
                         background: h ? T.gridCellHL : sel ? T.silver + "14" : T.gridCell,
@@ -1642,6 +1885,28 @@ export default function Trinity() {
                           effStats={cell.cd.type === "entity" && !cell.fd ? getEff(cell.cd, game.bd, r, c, cell.ib) : null} />}
                       </div>);
                   }))}
+                  {/* Single 3×3 contour rect per terrain card */}
+                  {(() => {
+                    const VB = 500, pad = 2, gap = 2, cs = (VB - 2 * pad - 4 * gap) / 5;
+                    const cx = col => pad + col * (cs + gap), cy = row => pad + row * (cs + gap);
+                    const mr = curR; const rects = [];
+                    for (let tr = 0; tr < 5; tr++) for (let tc = 0; tc < 5; tc++) {
+                      const cl = game.bd[tr][tc];
+                      if (!cl?.cd || cl.cd.type !== "terrain" || cl.fd) continue;
+                      const vtr = mr === "ai" ? 4 - tr : tr, vtc = mr === "ai" ? 4 - tc : tc;
+                      const r0 = Math.max(0, vtr - 1), c0 = Math.max(0, vtc - 1);
+                      const r1 = Math.min(4, vtr + 1), c1 = Math.min(4, vtc + 1);
+                      const a = aura(cl.cd);
+                      const color = a > 0 ? "#b8a060" : a < 0 ? "#6030a0" : "#6a6050";
+                      rects.push({ x: cx(c0), y: cy(r0), w: cx(c1) + cs - cx(c0), h: cy(r1) + cs - cy(r0), color });
+                    }
+                    if (!rects.length) return null;
+                    return (
+                      <svg viewBox={`0 0 ${VB} ${VB}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+                        {rects.map((rc, i) => <rect key={i} x={rc.x} y={rc.y} width={rc.w} height={rc.h} fill="none" stroke={rc.color} strokeWidth={1.5} opacity={0.18} rx={3} />)}
+                      </svg>
+                    );
+                  })()}
                 </div>
               </div>
               {/* Player hand — horizontally scrollable */}
@@ -1749,6 +2014,7 @@ export default function Trinity() {
                     <button onClick={() => playBC(mode)} style={B(mode === "blessing" ? T.bless : T.curse)}>
                       {mode === "blessing" ? "△" : "▽"} Play ({game.c === 0 ? "FREE" : "1"})</button>
                     <button onClick={doSetTrap} style={B(T.silverDim)}>▼ Trap (FREE)</button></>)}
+                  {freeDraw && (<button onClick={doFreeDraw} style={B(T.silver)}>⊕ Free Draw</button>)}
                   {mode === "chooseStat" && tapTgt && (
                     <div style={{ display: "flex", gap: 2 }}>
                       {STAT_DEFS.map(s => (<button key={s.key} onClick={() => resolveTap(s.key)} style={{
@@ -1777,7 +2043,7 @@ export default function Trinity() {
           <div style={{ animation: "fadeIn .3s" }}>
             {/* Mode toggle */}
             <div style={{ display: "flex", gap: 2, marginBottom: 8 }}>
-              {[["single", "Single Card"], ["generate", "Set Generator"]].map(([m, l]) => (
+              {[["single", "Card"], ["generate", "Set"], ["campaign", "Campaign"]].map(([m, l]) => (
                 <button key={m} onClick={() => setForgeMode(m)} style={{
                   padding: "5px 14px", border: `1px solid ${forgeMode === m ? T.silverBright : T.panelBorder}`,
                   background: forgeMode === m ? T.silver + "12" : T.panel, borderRadius: 3, cursor: "pointer",
@@ -1838,13 +2104,16 @@ export default function Trinity() {
                   <div style={{ fontSize: 9, color: T.textDim, fontFamily: FONT_UI }}>{cardPool.length} cards</div>
                 </div>
               </div>
-            ) : (
+            ) : forgeMode === "generate" ? (
               /* SET GENERATOR */
               <div style={{ display: "flex", gap: 16, alignItems: "flex-start", height: "calc(100vh - 120px)" }}>
                 <div style={{ width: 360, flexShrink: 0, padding: 12, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, overflowY: "auto", maxHeight: "100%" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: 10, marginBottom: 12 }}>
                     <div><label style={LBL}>SET NAME</label>
-                      <input value={gen.name} onChange={e => setGen(p => ({ ...p, name: e.target.value }))} style={{ ...INP, fontSize: 14, padding: "6px 10px" }} /></div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input value={gen.name} onChange={e => setGen(p => ({ ...p, name: e.target.value }))} style={{ ...INP, fontSize: 14, padding: "6px 10px", flex: 1 }} />
+                        <input type="color" value={gen.color} onChange={e => setGen(p => ({ ...p, color: e.target.value }))} title="Set color" style={{ width: 34, height: 34, border: `1px solid ${T.panelBorder}`, borderRadius: 3, cursor: "pointer", padding: 2, background: T.bg2, flexShrink: 0 }} />
+                      </div></div>
                     <div><label style={LBL}>TOTAL CARDS</label>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, marginTop: 4 }}>
                         <input type="range" min="10" max="2000" value={gen.total} onChange={e => setGen(p => ({ ...p, total: parseInt(e.target.value) }))} style={{ width: "100%", accentColor: T.silver }} />
@@ -1854,7 +2123,7 @@ export default function Trinity() {
                   <div style={{ marginBottom: 12 }}>
                     <label style={LBL}>TYPE DISTRIBUTION</label>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginTop: 4 }}>
-                      {[["Entity", "pctEntity", TC.entity], ["Bless", "pctBless", TC.blessing], ["Curse", "pctCurse", TC.curse], ["Terrain", "pctTerrain", TC.terrain], ["Equip", "pctItem", TC.item]].map(([label, key, color]) => (
+                      {[["Entity", "pctEntity", TC.entity], ["Bless", "pctBless", TC.blessing], ["Curse", "pctCurse", TC.curse], ["Equip", "pctItem", TC.item], ["Terrain", "pctTerrain", TC.terrain]].map(([label, key, color]) => (
                         <div key={key} style={{ textAlign: "center" }}>
                           <div style={{ fontSize: 8, color, fontFamily: FONT_UI, fontWeight: 800, marginBottom: 2 }}>{label}</div>
                           <input type="range" min="0" max="100" value={gen[key]} onChange={e => setGen(p => ({ ...p, [key]: parseInt(e.target.value) }))} style={{ width: "100%", accentColor: color }} />
@@ -1940,120 +2209,292 @@ export default function Trinity() {
                   {/* Live preview table — updates as you drag sliders */}
                   <div style={{ padding: 8, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, flex: 1, overflowY: "auto" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <label style={LBL}>PREVIEW ({livePreview.length} cards)</label>
-                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <label style={{ ...B(T.silverDim), fontSize: 7, padding: "3px 8px", cursor: "pointer" }}>
-                        Random Assign Images<input type="file" accept="image/*" multiple onChange={async (e) => {
-                          const files = Array.from(e.target.files);
-                          if (!files.length) return;
-                          for (let fi = 0; fi < files.length; fi++) {
-                            const path = await uploadFile(files[fi]);
-                            if (path) {
-                              setGenImages(prev => {
-                                const n = { ...prev };
-                                for (let ri = fi; ri < livePreview.length; ri += files.length) {
-                                  n[ri] = path;
-                                }
-                                return n;
-                              });
+                      <label style={LBL}>PREVIEW ({livePreview.length} cards)</label>
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <label style={{ ...B(T.silverDim), fontSize: 7, padding: "3px 8px", cursor: "pointer" }}>
+                          Random Assign Images<input type="file" accept="image/*" multiple onChange={async (e) => {
+                            const files = Array.from(e.target.files);
+                            if (!files.length) return;
+                            for (let fi = 0; fi < files.length; fi++) {
+                              const path = await uploadFile(files[fi]);
+                              if (path) {
+                                setGenImages(prev => {
+                                  const n = { ...prev };
+                                  for (let ri = fi; ri < livePreview.length; ri += files.length) {
+                                    n[ri] = path;
+                                  }
+                                  return n;
+                                });
+                              }
                             }
-                          }
-                          e.target.value = "";
-                        }} style={{ display: "none" }} />
-                      </label>
-                      {Object.keys(genImages).length > 0 && <button onClick={() => setGenImages({})} style={{ ...B(T.textDim), fontSize: 7, padding: "3px 8px" }}>Clear Art</button>}
-                      <div style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI }}>
-                        {["entity", "blessing", "curse", "terrain", "equip"].map(t => {
-                          const n = livePreview.filter(c => c.type === t).length;
-                          return n ? <span key={t} style={{ color: TC[t] || T.text, marginLeft: 6 }}>{n} {t.slice(0, 3)}</span> : null;
-                        })}
+                            e.target.value = "";
+                          }} style={{ display: "none" }} />
+                        </label>
+                        {Object.keys(genImages).length > 0 && <button onClick={() => setGenImages({})} style={{ ...B(T.textDim), fontSize: 7, padding: "3px 8px" }}>Clear Art</button>}
+                        <div style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI }}>
+                          {["entity", "blessing", "curse", "terrain", "equip"].map(t => {
+                            const n = livePreview.filter(c => c.type === t).length;
+                            return n ? <span key={t} style={{ color: TC[t] || T.text, marginLeft: 6 }}>{n} {t.slice(0, 3)}</span> : null;
+                          })}
+                        </div>
                       </div>
                     </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: FONT_UI }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${T.panelBorder}`, position: "sticky", top: 0, background: T.panel }}>
+                          {["#", "Art", "Type", "Uniq", "S", "M", "W", "|Pwr|", "Aura", "Rar", "C Pwr"].map(h => (
+                            <th key={h} style={{ textAlign: "left", padding: "2px 4px", color: T.textDim, fontWeight: 700, fontSize: 7, letterSpacing: 1 }}>{h}</th>))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {livePreview.map((c, i) => {
+                          const pwr = Math.abs(c.soul) + Math.abs(c.mind) + Math.abs(c.will);
+                          const au = c.soul + c.mind + c.will;
+                          const ori = au > 0 ? "△" : au < 0 ? "▽" : pwr > 0 ? "✡" : "";
+                          const img = genImages[i];
+                          return (
+                            <tr key={i} style={{ borderBottom: `1px solid ${T.panelBorder}15` }}>
+                              <td style={{ padding: "1px 4px", color: T.textDim }}>{i + 1}</td>
+                              <td style={{ padding: "1px 2px" }}>
+                                <label
+                                  draggable={!!img}
+                                  onDragStart={() => { dragRef.current = i; }}
+                                  onDragOver={e => e.preventDefault()}
+                                  onDrop={e => { e.preventDefault(); const from = dragRef.current; if (from !== null && from !== i) { setGenImages(prev => { const n = { ...prev }; const tmp = n[from]; n[from] = n[i]; n[i] = tmp; return n; }); } dragRef.current = null; }}
+                                  style={{
+                                    width: 20, height: 20, display: "block", borderRadius: 2, cursor: img ? "grab" : "pointer",
+                                    background: img ? `url(${img}) center/cover` : T.bg2,
+                                    border: `1px solid ${img ? T.silverDim : T.panelBorder}`
+                                  }}
+                                >
+                                  {!img && <span style={{ fontSize: 8, color: T.textDim, lineHeight: "20px", textAlign: "center", display: "block" }}>+</span>}
+                                  <input type="file" accept="image/*" onChange={async (e) => {
+                                    const f = e.target.files[0]; if (!f) return;
+                                    const path = await uploadFile(f);
+                                    if (path) setGenImages(prev => ({ ...prev, [i]: path }));
+                                    e.target.value = "";
+                                  }} style={{ display: "none" }} />
+                                </label>
+                              </td>
+                              <td style={{ padding: "1px 4px", color: TC[c.type] || T.text }}>{c.type.slice(0, 3)}</td>
+                              <td style={{ padding: "1px 4px", color: T.textBright }}>{c.isUnique ? "✧" : "·"}</td>
+                              <td style={{ padding: "1px 4px", color: c.soul > 0 ? STAT_DEFS[0].color : c.soul < 0 ? T.curse : T.textDim }}>{c.soul || "·"}</td>
+                              <td style={{ padding: "1px 4px", color: c.mind > 0 ? STAT_DEFS[1].color : c.mind < 0 ? T.curse : T.textDim }}>{c.mind || "·"}</td>
+                              <td style={{ padding: "1px 4px", color: c.will > 0 ? STAT_DEFS[2].color : c.will < 0 ? T.curse : T.textDim }}>{c.will || "·"}</td>
+                              <td style={{ padding: "1px 4px", color: T.silverBright, fontWeight: 800 }}>{pwr || "·"}</td>
+                              <td style={{ padding: "1px 4px", color: au > 0 ? T.light : au < 0 ? T.dark : T.balanced }}>{ori === "✡" ? <span style={{ fontSize: "1.3em", lineHeight: 1 }}>✡</span> : ori}{au || ""}</td>
+                              <td style={{ padding: "1px 4px", color: RC[c.rarity] }}>{c.rarity?.[0]?.toUpperCase()}</td>
+                              <td style={{ padding: "1px 4px", color: c.power ? (c.type === "blessing" ? TC.blessing : TC.curse) : T.textDim }}>{c.power || "·"}</td>
+                            </tr>);
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: FONT_UI }}>
-                    <thead>
-                      <tr style={{ borderBottom: `1px solid ${T.panelBorder}`, position: "sticky", top: 0, background: T.panel }}>
-                        {["#", "Art", "Type", "Uniq", "S", "M", "W", "|Pwr|", "Aura", "Rar", "C Pwr"].map(h => (
-                          <th key={h} style={{ textAlign: "left", padding: "2px 4px", color: T.textDim, fontWeight: 700, fontSize: 7, letterSpacing: 1 }}>{h}</th>))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {livePreview.map((c, i) => {
-                        const pwr = Math.abs(c.soul) + Math.abs(c.mind) + Math.abs(c.will);
-                        const au = c.soul + c.mind + c.will;
-                        const ori = au > 0 ? "△" : au < 0 ? "▽" : pwr > 0 ? "✡" : "";
-                        const img = genImages[i];
-                        return (
-                          <tr key={i} style={{ borderBottom: `1px solid ${T.panelBorder}15` }}>
-                            <td style={{ padding: "1px 4px", color: T.textDim }}>{i + 1}</td>
-                            <td style={{ padding: "1px 2px" }}>
-                              <label
-                                draggable={!!img}
-                                onDragStart={() => { dragRef.current = i; }}
-                                onDragOver={e => e.preventDefault()}
-                                onDrop={e => { e.preventDefault(); const from = dragRef.current; if (from !== null && from !== i) { setGenImages(prev => { const n = { ...prev }; const tmp = n[from]; n[from] = n[i]; n[i] = tmp; return n; }); } dragRef.current = null; }}
-                                style={{
-                                  width: 20, height: 20, display: "block", borderRadius: 2, cursor: img ? "grab" : "pointer",
-                                  background: img ? `url(${img}) center/cover` : T.bg2,
-                                  border: `1px solid ${img ? T.silverDim : T.panelBorder}`
-                                }}
-                              >
-                                {!img && <span style={{ fontSize: 8, color: T.textDim, lineHeight: "20px", textAlign: "center", display: "block" }}>+</span>}
-                                <input type="file" accept="image/*" onChange={async (e) => {
-                                  const f = e.target.files[0]; if (!f) return;
-                                  const path = await uploadFile(f);
-                                  if (path) setGenImages(prev => ({ ...prev, [i]: path }));
-                                  e.target.value = "";
-                                }} style={{ display: "none" }} />
-                              </label>
-                            </td>
-                            <td style={{ padding: "1px 4px", color: TC[c.type] || T.text }}>{c.type.slice(0, 3)}</td>
-                            <td style={{ padding: "1px 4px", color: T.textBright }}>{c.isUnique ? "✧" : "·"}</td>
-                            <td style={{ padding: "1px 4px", color: c.soul > 0 ? STAT_DEFS[0].color : c.soul < 0 ? T.curse : T.textDim }}>{c.soul || "·"}</td>
-                            <td style={{ padding: "1px 4px", color: c.mind > 0 ? STAT_DEFS[1].color : c.mind < 0 ? T.curse : T.textDim }}>{c.mind || "·"}</td>
-                            <td style={{ padding: "1px 4px", color: c.will > 0 ? STAT_DEFS[2].color : c.will < 0 ? T.curse : T.textDim }}>{c.will || "·"}</td>
-                            <td style={{ padding: "1px 4px", color: T.silverBright, fontWeight: 800 }}>{pwr || "·"}</td>
-                            <td style={{ padding: "1px 4px", color: au > 0 ? T.light : au < 0 ? T.dark : T.balanced }}>{ori}{au || ""}</td>
-                            <td style={{ padding: "1px 4px", color: RC[c.rarity] }}>{c.rarity?.[0]?.toUpperCase()}</td>
-                            <td style={{ padding: "1px 4px", color: c.power ? (c.type === "blessing" ? TC.blessing : TC.curse) : T.textDim }}>{c.power || "·"}</td>
-                          </tr>);
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Existing sets */}
-                <div style={{ padding: 8, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, display: "flex", gap: 6, flexWrap: "wrap", flexShrink: 0 }}>
-                  <div style={{ fontSize: 9, color: T.textBright, fontFamily: FONT_UI, fontWeight: 800, letterSpacing: 1, alignSelf: "center", marginRight: 4 }}>EXISTING SETS</div>
-                  {sets.map(s => (
-                    <div key={s.id} style={{ padding: "3px 8px", background: T.bg1, border: `1px solid ${T.panelBorder}`, borderRadius: 3, fontSize: 8, color: T.textDim, fontFamily: FONT_UI }}>
-                      <span style={{ color: T.textBright, fontWeight: 700 }}>{s.name}</span> · {s.cardIds.length}
-                    </div>))}
+                  {/* Existing sets */}
+                  <div style={{ padding: 8, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, display: "flex", gap: 6, flexWrap: "wrap", flexShrink: 0 }}>
+                    <div style={{ fontSize: 9, color: T.textBright, fontFamily: FONT_UI, fontWeight: 800, letterSpacing: 1, alignSelf: "center", marginRight: 4 }}>EXISTING SETS</div>
+                    {sets.map(s => (
+                      <div key={s.id} style={{ padding: "3px 8px", background: T.bg1, border: `1px solid ${T.panelBorder}`, borderRadius: 3, fontSize: 8, color: T.textDim, fontFamily: FONT_UI }}>
+                        <span style={{ color: T.textBright, fontWeight: 700 }}>{s.name}</span> · {s.cardIds.length}
+                      </div>))}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* CAMPAIGN GENERATOR */
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {/* ── Controls strip (fixed-width columns, h-scroll if needed) ── */}
+                <div style={{ overflowX: "auto" }}>
+                  <div style={{ display: "flex", gap: 0, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, alignItems: "stretch", minWidth: "max-content" }}>
+
+                    {/* Col 1: Cards/set + dist mode + generate — 175px */}
+                    <div style={{ width: 175, flexShrink: 0, padding: 10, display: "flex", flexDirection: "column", gap: 5 }}>
+                      <label style={LBL}>AVG CARDS / SET</label>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="range" min="10" max="2000" value={camGen.cardsPerSet} onChange={e => setCamGen(p => ({ ...p, cardsPerSet: parseInt(e.target.value) }))} style={{ width: 100, accentColor: T.silver }} />
+                        <span style={{ fontFamily: FONT_UI, fontSize: 11, color: T.silverBright, fontWeight: 900, minWidth: 32, textAlign: "right" }}>{camGen.cardsPerSet}</span>
+                      </div>
+                      <div style={{ fontSize: 7, color: T.textDim }}>{camGen.cardsPerSet * CAMPAIGN_SET_IDS.length} total</div>
+                      <label style={LBL}>DISTRIBUTION</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {[["uniform","Uniform"], ["bell","Bell (mid heavy)"], ["ramp","Ramp (A→Z grows)"], ["ramp_inv","Ramp (A→Z shrinks)"]].map(([m, l]) => (
+                          <label key={m} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 7, color: camGen.distMode === m ? T.silverBright : T.textDim, fontFamily: FONT_UI }}>
+                            <input type="radio" name="distMode" checked={camGen.distMode === m} onChange={() => setCamGen(p => ({ ...p, distMode: m }))} style={{ accentColor: T.silverBright }} />
+                            {l}
+                          </label>
+                        ))}
+                      </div>
+                      {camGen.distMode === "bell" && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI, flexShrink: 0 }}>Spread</span>
+                          <input type="range" min="10" max="100" value={camGen.bellSpread} onChange={e => setCamGen(p => ({ ...p, bellSpread: parseInt(e.target.value) }))} style={{ width: 70, accentColor: T.silver }} />
+                          <span style={{ fontSize: 9, color: T.silverBright, fontFamily: FONT_UI, fontWeight: 900, minWidth: 20 }}>{camGen.bellSpread}</span>
+                        </div>
+                      )}
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 7, color: T.textBright, fontFamily: FONT_UI, marginTop: 2 }}>
+                        <input type="checkbox" checked={camGen.ensureTypes} onChange={e => setCamGen(p => ({ ...p, ensureTypes: e.target.checked }))} style={{ accentColor: T.silverBright }} />
+                        ENSURE TYPES
+                      </label>
+                      <button onClick={generateCampaign} style={{ ...B(T.legendary), letterSpacing: 2, fontSize: 10, padding: "7px 8px", marginTop: 4 }}>
+                        ✦ GENERATE
+                      </button>
+                    </div>
+
+                    <div style={{ width: 1, background: T.panelBorder, flexShrink: 0 }} />
+
+                    {/* Col 2: Entity power ramp — 205px */}
+                    <div style={{ width: 205, flexShrink: 0, padding: 10 }}>
+                      <label style={LBL}>ENTITY POWER (|S|+|M|+|W|)</label>
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        {[["A", "startPowerMin", "startPowerMax", T.silverDim], ["Z", "endPowerMin", "endPowerMax", T.silverBright]].map(([label, minK, maxK, color]) => (
+                          <div key={label} style={{ flex: 1, padding: "4px 6px", background: T.bg2, borderRadius: 3, border: `1px solid ${color}28` }}>
+                            <div style={{ fontSize: 7, color, fontFamily: FONT_UI, fontWeight: 800, marginBottom: 2 }}>{label}</div>
+                            {[[minK, "↓"], [maxK, "↑"]].map(([k, lb]) => (
+                              <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                <span style={{ fontSize: 7, color: T.textDim, width: 8, flexShrink: 0 }}>{lb}</span>
+                                <input type="range" min="0" max="9" value={camGen[k]} onChange={e => { const v = parseInt(e.target.value); setCamGen(p => k.endsWith("Min") ? { ...p, [k]: Math.min(v, p[maxK]) } : { ...p, [k]: Math.max(v, p[minK]) }); }} style={{ width: 60, accentColor: color }} />
+                                <span style={{ fontSize: 9, color, fontFamily: FONT_UI, fontWeight: 900, width: 14, textAlign: "right", flexShrink: 0 }}>{camGen[k]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ height: 2, borderRadius: 1, marginTop: 4, background: `linear-gradient(to right, ${T.silverDim}, ${T.silverBright})` }} />
+                    </div>
+
+                    <div style={{ width: 1, background: T.panelBorder, flexShrink: 0 }} />
+
+                    {/* Col 3: Bless/Curse/Equip/Terr power — 220px */}
+                    <div style={{ width: 220, flexShrink: 0, padding: 10 }}>
+                      <label style={LBL}>BLESS / CURSE / EQUIP / TERR PWR</label>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 4 }}>
+                        {[
+                          ["Bless A","startBlessPwrMin","startBlessPwrMax",TC.blessing],["Bless Z","endBlessPwrMin","endBlessPwrMax",TC.blessing],
+                          ["Curse A","startCursePwrMin","startCursePwrMax",TC.curse],["Curse Z","endCursePwrMin","endCursePwrMax",TC.curse],
+                          ["Equip A","startEquipPwrMin","startEquipPwrMax",TC.equip],["Equip Z","endEquipPwrMin","endEquipPwrMax",TC.equip],
+                          ["Terr A","startTerrPwrMin","startTerrPwrMax",TC.terrain],["Terr Z","endTerrPwrMin","endTerrPwrMax",TC.terrain],
+                        ].map(([label, minK, maxK, color]) => (
+                          <div key={label} style={{ padding: "4px 6px", background: T.bg2, borderRadius: 3, border: `1px solid ${color}22` }}>
+                            <div style={{ fontSize: 7, color, fontFamily: FONT_UI, fontWeight: 800, marginBottom: 2 }}>{label}</div>
+                            {[[minK, "↓"], [maxK, "↑"]].map(([k, lb]) => (
+                              <div key={k} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                <span style={{ fontSize: 7, color: T.textDim, width: 8, flexShrink: 0 }}>{lb}</span>
+                                <input type="range" min="1" max="9" value={camGen[k]} onChange={e => { const v = parseInt(e.target.value); setCamGen(p => k.endsWith("Min") ? { ...p, [k]: Math.min(v, p[maxK]) } : { ...p, [k]: Math.max(v, p[minK]) }); }} style={{ width: 50, accentColor: color }} />
+                                <span style={{ fontSize: 9, color, fontFamily: FONT_UI, fontWeight: 900, width: 14, textAlign: "right", flexShrink: 0 }}>{camGen[k]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ width: 1, background: T.panelBorder, flexShrink: 0 }} />
+
+                    {/* Col 4: Type distribution — 160px */}
+                    <div style={{ width: 160, flexShrink: 0, padding: 10 }}>
+                      <label style={LBL}>TYPE DISTRIBUTION</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+                        {[["Ent","pctEntity",TC.entity],["Bless","pctBless",TC.blessing],["Curse","pctCurse",TC.curse],["Equip","pctItem",TC.equip],["Terr","pctTerrain",TC.terrain]].map(([label, key, color]) => (
+                          <div key={key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 7, color, fontFamily: FONT_UI, fontWeight: 800, width: 30, flexShrink: 0 }}>{label}</span>
+                            <input type="range" min="0" max="100" value={camGen[key]} onChange={e => setCamGen(p => ({ ...p, [key]: parseInt(e.target.value) }))} style={{ width: 70, accentColor: color }} />
+                            <span style={{ fontSize: 9, color, fontFamily: FONT_UI, fontWeight: 900, width: 26, textAlign: "right", flexShrink: 0 }}>{camGen[key]}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ width: 1, background: T.panelBorder, flexShrink: 0 }} />
+
+                    {/* Col 5: Rarity ramp — 245px */}
+                    <div style={{ width: 245, flexShrink: 0, padding: 10 }}>
+                      <label style={LBL}>RARITY RAMP</label>
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        {[["SET A","startRarCommon","startRarUncommon","startRarRare","startRarLegendary",T.silverDim],["SET Z","endRarCommon","endRarUncommon","endRarRare","endRarLegendary",T.silverBright]].map(([label, ck, uk, rk, lk, color]) => (
+                          <div key={label} style={{ flex: 1, padding: "4px 6px", background: T.bg2, borderRadius: 3, border: `1px solid ${color}28` }}>
+                            <div style={{ fontSize: 7, color, fontFamily: FONT_UI, fontWeight: 800, marginBottom: 3 }}>{label}</div>
+                            {[[ck,"C",RC.common],[uk,"U",RC.uncommon],[rk,"R",RC.rare],[lk,"L",RC.legendary]].map(([k, lb, rc]) => (
+                              <div key={k} style={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 3 }}>
+                                <span style={{ fontSize: 7, color: rc, fontFamily: FONT_UI, fontWeight: 800, width: 8, flexShrink: 0 }}>{lb}</span>
+                                <input type="range" min="0" max="100" value={camGen[k]} onChange={e => setCamGen(p => ({ ...p, [k]: parseInt(e.target.value) }))} style={{ width: 70, accentColor: rc }} />
+                                <span style={{ fontSize: 8, color: rc, fontFamily: FONT_UI, fontWeight: 700, width: 22, textAlign: "right", flexShrink: 0 }}>{camGen[k]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* ── Preview table ── */}
+                <div style={{ padding: "8px 10px", background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4 }}>
+                  <label style={LBL}>SET PROGRESSION PREVIEW</label>
+                  <div style={{ overflowX: "auto", marginTop: 6 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 8, fontFamily: FONT_UI, minWidth: 560 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${T.panelBorder}` }}>
+                          {[["Set",T.textDim],["Ent.Pwr",T.entity],["E.±",T.entity],["Bless",TC.blessing],["Curse",TC.curse],["Equip",TC.equip],["Terr",TC.terrain],["Cards",T.textDim],["C%",RC.common],["U%",RC.uncommon],["R%",RC.rare],["L%",RC.legendary]].map(([h,color]) => (
+                            <th key={h} style={{ textAlign: "left", padding: "2px 6px", color, fontWeight: 700, fontSize: 7, letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {campaignPreview.map(({ setId, si, cards, powerMin, powerMax, blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax, equipPwrMin, equipPwrMax, terrPwrMin, terrPwrMax, rarCommon, rarUncommon, rarRare, rarLegendary }) => {
+                          const setObj = sets.find(s => s.id === setId);
+                          const totalW = rarCommon + rarUncommon + rarRare + rarLegendary || 1;
+                          const statMax = Math.min(STAT_MAX, powerMax);
+                          return (
+                            <tr key={setId} style={{ background: si % 2 === 0 ? T.bg2 : "transparent", borderBottom: `1px solid ${T.panelBorder}18` }}>
+                              <td style={{ padding: "3px 6px", whiteSpace: "nowrap" }}>
+                                <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: setObj?.color || T.panel, marginRight: 4, verticalAlign: "middle" }} />
+                                <span style={{ color: T.textBright, fontWeight: 800 }}>{setObj?.name || setId}</span>
+                              </td>
+                              <td style={{ padding: "3px 6px", color: T.entity, fontWeight: 700 }}>{powerMin}–{powerMax}</td>
+                              <td style={{ padding: "3px 6px", color: T.entity }}>±{statMax}</td>
+                              <td style={{ padding: "3px 6px", color: TC.blessing, fontWeight: 700 }}>{blessPwrMin}–{blessPwrMax}C</td>
+                              <td style={{ padding: "3px 6px", color: TC.curse, fontWeight: 700 }}>{cursePwrMin}–{cursePwrMax}C</td>
+                              <td style={{ padding: "3px 6px", color: TC.equip }}>±{equipPwrMin}–{equipPwrMax}</td>
+                              <td style={{ padding: "3px 6px", color: TC.terrain }}>±{terrPwrMin}–{terrPwrMax}×2</td>
+                              <td style={{ padding: "3px 6px", color: cards !== camGen.cardsPerSet ? T.silverBright : T.textDim, fontWeight: cards !== camGen.cardsPerSet ? 800 : 400 }}>{cards}</td>
+                              <td style={{ padding: "3px 6px", color: RC.common, fontWeight: 700 }}>{Math.round(rarCommon/totalW*100)}%</td>
+                              <td style={{ padding: "3px 6px", color: RC.uncommon, fontWeight: 700 }}>{Math.round(rarUncommon/totalW*100)}%</td>
+                              <td style={{ padding: "3px 6px", color: RC.rare, fontWeight: 700 }}>{Math.round(rarRare/totalW*100)}%</td>
+                              <td style={{ padding: "3px 6px", color: RC.legendary, fontWeight: 700 }}>{Math.round(rarLegendary/totalW*100)}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 7, color: T.textDim, fontFamily: FONT_UI }}>
+                    {campaignPreview.reduce((s, r) => s + r.cards, 0)} total placeholder cards · blank names & art · ready to customize
+                  </div>
+                </div>
+              </div>
             )}
           </div>)}
 
         {/* ═══ DECKS ═══ */}
-        {tab === "decks" && (
-          <div style={{ animation: "fadeIn .3s" }}>
+        <div style={{ display: tab === "decks" ? undefined : "none" }}>
             {!editDeck ? (<>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>DECKS</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <h2 style={{ fontFamily: FONT_UI, fontSize: 14, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>DECKS</h2>
                 <button onClick={() => { setDecks(p => [...p, { name: "New Deck", cards: [] }]); setEditDeck({ idx: decks.length }); }} style={B(T.silverBright)}>+ New</button></div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 5 }}>
-                {decks.map((d, i) => (<div key={i} onClick={() => setEditDeck({ idx: i })} style={{ padding: 6, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, cursor: "pointer" }}>
-                  <div style={{ fontFamily: FONT_UI, fontSize: 9, color: T.textBright, fontWeight: 700 }}>{d.name}</div>
-                  <div style={{ fontSize: 8, color: T.textDim }}>{d.cards.length}/{DECK_SIZE}</div></div>))}</div></>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 8 }}>
+                {decks.map((d, i) => (<div key={i} onClick={() => setEditDeck({ idx: i })} style={{ padding: 10, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, cursor: "pointer" }}>
+                  <div style={{ fontFamily: FONT_UI, fontSize: 12, color: T.textBright, fontWeight: 700, marginBottom: 3 }}>{d.name}</div>
+                  <div style={{ fontSize: 10, color: T.textDim }}>{d.cards.length}/{DECK_SIZE} cards</div></div>))}</div></>
             ) : (<>
-              <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 5 }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
                 <button onClick={() => setEditDeck(null)} style={B(T.textDim)}>←</button>
                 <input value={decks[editDeck.idx]?.name || ""} onChange={e => { const u = [...decks]; u[editDeck.idx] = { ...u[editDeck.idx], name: e.target.value }; setDecks(u); }}
-                  style={{ ...INP, fontFamily: FONT_UI, fontSize: 10, flex: 1, fontWeight: 700 }} />
-                <span style={{ fontSize: 8, color: T.textDim, fontWeight: 700 }}>{decks[editDeck.idx]?.cards.length}/{DECK_SIZE}</span>
-                <div style={{ display: "flex", gap: 2 }}>
-                  <button onClick={() => setDeckSortMode("type")} style={{ padding: "3px 8px", border: `1px solid ${deckSortMode === "type" ? T.silverBright : T.panelBorder}`, background: deckSortMode === "type" ? T.silver + "15" : T.panel, borderRadius: 2, cursor: "pointer", color: deckSortMode === "type" ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 7, fontWeight: 800, textTransform: "uppercase" }}>Type Sort</button>
-                  <button onClick={() => setDeckSortMode("rarity")} style={{ padding: "3px 8px", border: `1px solid ${deckSortMode === "rarity" ? T.silverBright : T.panelBorder}`, background: deckSortMode === "rarity" ? T.silver + "15" : T.panel, borderRadius: 2, cursor: "pointer", color: deckSortMode === "rarity" ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 7, fontWeight: 800, textTransform: "uppercase" }}>Rarity Sort</button>
+                  style={{ ...INP, fontFamily: FONT_UI, fontSize: 13, flex: 1, fontWeight: 700 }} />
+                <span style={{ fontSize: 11, color: T.textDim, fontWeight: 700, whiteSpace: "nowrap" }}>{decks[editDeck.idx]?.cards.length}/{DECK_SIZE}</span>
+                <div style={{ display: "flex", gap: 3 }}>
+                  <button onClick={() => setDeckSortMode("type")} style={{ padding: "4px 10px", border: `1px solid ${deckSortMode === "type" ? T.silverBright : T.panelBorder}`, background: deckSortMode === "type" ? T.silver + "20" : T.panel, borderRadius: 3, cursor: "pointer", color: deckSortMode === "type" ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 9, fontWeight: 800, textTransform: "uppercase" }}>Type</button>
+                  <button onClick={() => setDeckSortMode("rarity")} style={{ padding: "4px 10px", border: `1px solid ${deckSortMode === "rarity" ? T.silverBright : T.panelBorder}`, background: deckSortMode === "rarity" ? T.silver + "20" : T.panel, borderRadius: 3, cursor: "pointer", color: deckSortMode === "rarity" ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 9, fontWeight: 800, textTransform: "uppercase" }}>Rarity</button>
                 </div>
               </div>
               {(() => {
@@ -2067,47 +2508,56 @@ export default function Trinity() {
                     return a.id.localeCompare(b.id);
                   });
                 };
-                const ownedCards = sortCards(cardPool.filter(c => owned(c.id) > 0));
-                const deckCards = sortCards((decks[editDeck.idx]?.cards || []).map(id => gc(id, cardPool)).filter(Boolean));
+                const ownedCards = sortCards(ownedCardPool);
+                const deckCards = sortCards((decks[editDeck.idx]?.cards || []).map(id => cardMap.get(id)).filter(Boolean));
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {["OWNED", "DECK"].map((label, ci) => (
-                      <div key={label} style={{ background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, padding: 8 }}>
-                        <div style={{ ...LBL, marginBottom: 4, fontSize: 8 }}>{label}</div>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxHeight: 520, overflowY: "auto" }}>
-                          {ci === 0 ? ownedCards.map((card, idx) => {
-                            const inDk = decks[editDeck.idx]?.cards.filter(id => id === card.id).length || 0;
-                            const avail = owned(card.id) - inDk;
-                            return (<div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
-                              <Card card={card} sz={100} dim={avail <= 0} onClick={() => {
-                                if (avail <= 0) return; const dk = decks[editDeck.idx];
-                                const terrainCount = dk.cards.map(id => gc(id, cardPool)).filter(c => c && c.type === "terrain").length;
-                                if (dk.cards.length >= DECK_SIZE || inDk >= MAX_COPIES || (card.type === "terrain" && terrainCount >= 2)) return;
-                                const u = [...decks]; u[editDeck.idx] = { ...dk, cards: [...dk.cards, card.id] }; setDecks(u);
-                              }} />
-                              <div style={{
-                                position: "absolute", top: -3, right: -3, minWidth: 14, height: 14, background: avail > 0 ? T.silverBright : T.danger, borderRadius: "50%",
-                                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, color: "#000", fontWeight: 800
-                              }}>{avail}</div>
-                            </div>);
-                          })
-                            : deckCards.map((card, i) => (
-                                <Card key={`${card.id}_${i}`} card={card} sz={100} onClick={() => {
-                                  const u = [...decks]; const cards = [...u[editDeck.idx].cards];
-                                  const origIdx = cards.indexOf(card.id);
-                                  if (origIdx !== -1) cards.splice(origIdx, 1);
-                                  u[editDeck.idx] = { ...u[editDeck.idx], cards }; setDecks(u);
-                                }} />
-                              ))}
-                        </div></div>))}
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10, alignItems: "start" }}>
+                    {/* COLLECTION panel */}
+                    <div style={{ background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, padding: 8 }}>
+                      <div style={{ ...LBL, marginBottom: 6, fontSize: 9 }}>COLLECTION <span style={{ color: T.textDim, fontWeight: 400 }}>— click to add</span></div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                        {ownedCards.map((card, idx) => {
+                          const inDk = decks[editDeck.idx]?.cards.filter(id => id === card.id).length || 0;
+                          const avail = owned(card.id) - inDk;
+                          return (<div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
+                            <Card card={card} sz={62} dim={avail <= 0} onClick={() => {
+                              if (avail <= 0) return; const dk = decks[editDeck.idx];
+                              const terrainCount = dk.cards.map(id => gc(id, cardPool)).filter(c => c && c.type === "terrain").length;
+                              if (dk.cards.length >= DECK_SIZE || inDk >= MAX_COPIES || (card.type === "terrain" && terrainCount >= 2)) return;
+                              const u = [...decks]; u[editDeck.idx] = { ...dk, cards: [...dk.cards, card.id] }; setDecks(u);
+                            }} />
+                            <div style={{
+                              position: "absolute", top: 1, right: 1, minWidth: 13, height: 13, background: avail > 0 ? T.silverBright : T.danger, borderRadius: "50%",
+                              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, color: "#000", fontWeight: 800
+                            }}>{avail}</div>
+                          </div>);
+                        })}
+                      </div>
+                    </div>
+                    {/* DECK panel */}
+                    <div style={{ background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, padding: 8 }}>
+                      <div style={{ ...LBL, marginBottom: 6, fontSize: 9 }}>DECK <span style={{ color: T.textDim, fontWeight: 400 }}>{deckCards.length}/{DECK_SIZE} — click to remove</span></div>
+                      {deckCards.length === 0
+                        ? <div style={{ fontSize: 9, color: T.textDim, padding: "12px 0", textAlign: "center" }}>Add cards from your collection</div>
+                        : <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                          {deckCards.map((card, i) => (
+                            <Card key={`${card.id}_${i}`} card={card} sz={62} onClick={() => {
+                              const u = [...decks]; const cards = [...u[editDeck.idx].cards];
+                              const origIdx = cards.indexOf(card.id);
+                              if (origIdx !== -1) cards.splice(origIdx, 1);
+                              u[editDeck.idx] = { ...u[editDeck.idx], cards }; setDecks(u);
+                            }} />
+                          ))}
+                        </div>
+                      }
+                    </div>
                   </div>
                 );
               })()}</>)}
-          </div>)}
+        </div>
 
         {/* ═══ CODEX ═══ */}
-        {tab === "browse" && (
-          <div style={{ animation: "fadeIn .3s" }}>
+        <div style={{ display: tab === "browse" ? undefined : "none" }}>
             <div style={{ display: "flex", gap: 3, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
               <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>CODEX</h2>
               <div style={{ marginLeft: "auto", display: "flex", gap: 1 }}>
@@ -2129,7 +2579,8 @@ export default function Trinity() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: bDet ? "1fr 220px" : "1fr", gap: 6 }}>
               <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                {cardPool.filter(c => (bF === "all" || c.type === bF) && (bSetF === "all" || sets.some(s => s.name === bSetF && s.cardIds.includes(c.id)))).map((card, idx) => {
+                {browseFiltered.length > CARD_RENDER_CAP && <div style={{ width: "100%", fontSize: 7, color: T.textDim, fontFamily: FONT_UI, marginBottom: 2 }}>Showing {CARD_RENDER_CAP} of {browseFiltered.length} · filter by type or set to narrow</div>}
+                {browseFiltered.slice(0, CARD_RENDER_CAP).map((card, idx) => {
                   const isMasked = !owned(card.id) && card.rarity === "legendary";
                   return (
                     <div key={`${card.id}_${idx}`} style={{ position: "relative" }}>
@@ -2176,34 +2627,45 @@ export default function Trinity() {
                           {s.name}</button>);
                       })}</div></div>
                 </div>)}
-            </div></div>)}
+            </div></div>
 
         {/* ═══ PACKS — no rarity sliders, just pick set & rip ═══ */}
         {tab === "packs" && (
-          <div style={{ animation: "fadeIn .3s" }}>
+          <div style={{ animation: "fadeIn .3s", zoom: 1.5 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>PACKS</h2>
-              <div style={{ fontFamily: FONT_UI, fontSize: 10, color: tokens >= PACK_COST ? T.silverBright : T.curse, fontWeight: 800 }}>{tokens} TOKENS</div>
+              <div style={{ fontFamily: FONT_UI, fontSize: 10, color: tokens >= PACK_COST ? T.silverBright : T.curse, fontWeight: 800, animation: tokenFlash ? "tokenGold 0.7s ease-out forwards" : "none" }}>{tokens} TOKENS</div>
             </div>
-            <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
-              {sets.map((s, i) => {
-                return (<button key={s.id} onClick={() => { setSelSI(i); setPackRes([]); }} style={{
-                  padding: "5px 14px", border: `1px solid ${selSI === i ? T.silverBright : T.panelBorder}`,
-                  background: selSI === i ? T.silver + "12" : T.panel, borderRadius: 3, cursor: "pointer",
-                  color: selSI === i ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 9, fontWeight: 700,
-                  display: "inline-flex", alignItems: "center", gap: 4
-                }}>
-                  {s.name} <span style={{ fontSize: 7, opacity: 0.6 }}>({s.cardIds.length})</span></button>);
-              })}
+            <div style={{ display: "flex", gap: 5, marginBottom: 20, flexWrap: "wrap", justifyContent: "center" }}>
+              {sets.map((s, i) => (
+                <div key={s.id} onClick={() => { if (selSI === i && packRes.length > 0) { ripPack(s); } else { setSelSI(i); setPackRes([]); setPackFlip([]); setPackSp([]); } }} title={s.name}
+                  style={{
+                    width: 36, height: 36, borderRadius: 4, cursor: "pointer", flexShrink: 0,
+                    background: s.color || T.panel,
+                    border: `2px solid ${selSI === i ? T.white : "transparent"}`,
+                    boxShadow: selSI === i ? `0 0 10px ${s.color || T.silver}99` : "0 1px 3px #00000066",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "box-shadow 0.15s, border-color 0.15s",
+                    animation: selSI === i ? "subtlePulse 2.4s ease-in-out infinite" : "none",
+                  }}>
+                  <span style={{ fontFamily: FONT_TITLE, fontSize: selSI === i ? 22 : 19, color: parseInt((s.color || "#888").slice(1), 16) > 0x888888 ? "#111" : "#eee", lineHeight: 1, userSelect: "none" }}>
+                    {selSI === i ? "" : (s.name[0] || "?").toUpperCase()}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, marginTop: 52 }}>
               {!packRes.length ? (
-                <button onClick={() => sets[selSI] && ripPack(sets[selSI])} disabled={tokens < PACK_COST} style={{
-                  padding: "10px 40px", background: "transparent", border: `1.5px solid ${tokens >= PACK_COST ? T.silverBright : T.panelBorder}`, borderRadius: 3,
-                  cursor: tokens >= PACK_COST ? "pointer" : "not-allowed", fontFamily: FONT_TITLE, fontSize: 18, color: tokens >= PACK_COST ? T.white : T.textDim, letterSpacing: 4
-                }}>{tokens >= PACK_COST ? "Open Pack" : "Locked (1 Token)"}</button>
-              ) : (<>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                <button onClick={() => sets[selSI]?.cardIds?.length && tokens >= PACK_COST && ripPack(sets[selSI])}
+                  disabled={!sets[selSI]?.cardIds?.length || tokens < PACK_COST} style={{
+                    padding: "10px 40px", background: "transparent", borderRadius: 3, letterSpacing: 4,
+                    border: `1.5px solid ${sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? T.silverBright : T.panelBorder}`,
+                    cursor: sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? "pointer" : "not-allowed",
+                    fontFamily: FONT_TITLE, fontSize: 18,
+                    color: sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? T.white : T.textDim,
+                  }}>{!sets[selSI]?.cardIds?.length ? "Empty Set" : tokens >= PACK_COST ? "Open Pack" : "Locked (1 Token)"}</button>
+              ) : (
+                <div style={{ display: "flex", gap: 16, flexWrap: "nowrap", justifyContent: "center" }}>
                   {packRes.map((card, i) => {
                     const rarShimmer = {
                       common: "shimmerCommon 2s ease-in-out infinite", uncommon: "shimmerUncommon 1.8s ease-in-out infinite",
@@ -2213,7 +2675,7 @@ export default function Trinity() {
                       setPackFlip(p => { const n = [...p]; n[i] = true; return n; });
                       if (card.rarity === "rare" || card.rarity === "legendary") setTimeout(() => setPackSp(p => { const n = [...p]; n[i] = true; return n; }), 100);
                     }}
-                      style={{ cursor: "pointer", animation: packFlip[i] ? `packPop .4s ease-out ${i * .12}s both` : "none" }}>
+                      style={{ cursor: "pointer", width: 144, height: 170, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", animation: packFlip[i] ? `packPop .4s ease-out ${i * .12}s both` : "none" }}>
                       {packFlip[i] ? (
                         <div style={{ textAlign: "center", animation: rarShimmer[card.rarity] || "none", borderRadius: 4, padding: 2 }}>
                           <Card card={card} sz={140} sparkle={packSp[i]} />
@@ -2223,35 +2685,20 @@ export default function Trinity() {
                           }}>{card.rarity}</div></div>
                       ) : (
                         <div style={{
-                          width: 140, height: 140 + 20, borderRadius: 3, border: `1.5px solid ${T.silverDim}22`,
-                          background: T.card,
-                          display: "flex", alignItems: "center", justifyContent: "center"
+                          width: 140, height: 155, borderRadius: 3, border: `1.5px solid ${T.silverDim}22`,
+                          background: T.card, display: "flex", alignItems: "center", justifyContent: "center"
                         }}>
                           <span style={{ fontFamily: FONT_TITLE, fontSize: 42, color: T.silverBright, lineHeight: 1 }}>T</span></div>)}
                     </div>);
                   })}</div>
-                <button onClick={() => { setPackRes([]); setPackFlip([]); setPackSp([]); }} style={{ ...B(T.silverBright), letterSpacing: 3, fontSize: 10 }}>Open Another</button>
-              </>)}
+              )}
             </div></div>)}
 
         {/* ═══ EDITOR — filterable, sortable, with image upload ═══ */}
-        {tab === "editor" && (() => {
-          const sortFns = {
-            id: (a, b) => a.id.localeCompare(b.id),
-            name: (a, b) => (a.name || "").localeCompare(b.name || ""),
-            type: (a, b) => a.type.localeCompare(b.type),
-            rarity: (a, b) => RO.indexOf(a.rarity) - RO.indexOf(b.rarity),
-            power: (a, b) => cPwr(b) - cPwr(a),
-            noart: (a, b) => (a.image ? 1 : 0) - (b.image ? 1 : 0),
-          };
-          const filtered = cardPool
-            .filter(c => edF.set === "all" || sets.some(s => s.name === edF.set && s.cardIds.includes(c.id)))
-            .filter(c => edF.type === "all" || c.type === edF.type)
-            .filter(c => edF.rarity === "all" || c.rarity === edF.rarity)
-            .filter(c => edF.art === "all" || (edF.art === "noart" ? !c.image : !!c.image))
-            .sort(sortFns[edF.sort] || sortFns.id);
+        {(() => {
+          const filtered = editorFiltered;
           return (
-            <div style={{ animation: "fadeIn .3s" }}>
+            <div style={{ display: tab === "editor" ? undefined : "none" }}>
               {/* Filter bar */}
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                 <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>EDITOR</h2>
@@ -2308,7 +2755,8 @@ export default function Trinity() {
                 {/* Card grid — drag images onto cards to assign art */}
                 <div style={{ display: "flex", gap: 3, flexWrap: "wrap", alignContent: "start", maxHeight: "calc(100vh - 110px)", overflowY: "auto", padding: 2 }}
                   onDragOver={e => e.preventDefault()}>
-                  {filtered.map((card, idx) => (
+                  {filtered.length > CARD_RENDER_CAP && <div style={{ width: "100%", fontSize: 7, color: T.textDim, fontFamily: FONT_UI, marginBottom: 2 }}>Showing {CARD_RENDER_CAP} of {filtered.length} · use filters to narrow</div>}
+                  {filtered.slice(0, CARD_RENDER_CAP).map((card, idx) => (
                     <div key={`${card.id}_${idx}`} style={{ position: "relative" }}
                       onDragOver={e => { e.preventDefault(); e.currentTarget.style.outline = `2px solid ${T.silverBright}`; }}
                       onDragLeave={e => { e.currentTarget.style.outline = "none"; }}
