@@ -4,71 +4,83 @@
     "id": "set_a",
     "color": "#303030",
     "cardIds": []
+    "cost_per_pack": 1
   },
   {
     "name": "C",
     "id": "set_c",
     "color": "#484848",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 2
   },
   {
     "name": "D",
     "id": "set_d",
     "color": "#606060",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 3
   },
   {
     "name": "G",
     "id": "set_g",
     "color": "#787878",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 5
   },
   {
     "name": "L",
     "id": "set_l",
     "color": "#909090",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 8
   },
   {
     "name": "Q",
     "id": "set_q",
     "color": "#a8a8a8",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 13
   },
   {
     "name": "R",
     "id": "set_r",
     "color": "#b8b8b8",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 21
   },
   {
     "name": "S",
     "id": "set_s",
     "color": "#c8c8c8",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 34
   },
   {
     "name": "U",
     "id": "set_u",
     "color": "#d4d4d4",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 55
   },
   {
     "name": "W",
     "id": "set_w",
     "color": "#dedede",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 89
   },
   {
     "name": "X",
     "id": "set_x",
     "color": "#ebebeb",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 144
   },
   {
     "name": "Z",
     "id": "set_z",
     "color": "#f4f4f4",
-    "cardIds": []
+    "cardIds": [],
+    "cost_per_pack": 233
   }
 ]

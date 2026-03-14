@@ -866,8 +866,10 @@ export default function Trinity() {
     else if (k === "f") { forfeit(); }
     else if (k === "p") { setShowPit(p => !p); }
     else if (k === "escape" || k === "c") { clr(); }
-    else if (k === "s") { if (mode === "blessing" || mode === "curse") doSetTrap(); }
-  }, [tab, game, aiR, drawCard, endTurn, forfeit, mode, clr, doSetTrap, mMode, mRole]);
+    else if (k === "s") { if (mode === "chooseStat") resolveTap("soul"); else if (mode === "blessing" || mode === "curse") doSetTrap(); }
+    else if (k === "m") { if (mode === "chooseStat") resolveTap("mind"); }
+    else if (k === "w") { if (mode === "chooseStat") resolveTap("will"); }
+  }, [tab, game, aiR, drawCard, endTurn, forfeit, mode, clr, doSetTrap, resolveTap, mMode, mRole]);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeys);
@@ -1450,10 +1452,11 @@ export default function Trinity() {
     });
   }
   function ripPack(setObj) {
-    if (tokens < PACK_COST) return;
+    const cost = setObj.cost_per_pack ?? PACK_COST;
+    if (tokens < cost) return;
     playSfx("pack");
     const sc = cardPool.filter(c => setObj.cardIds.includes(c.id)); if (!sc.length) return;
-    setTokens(t => t - PACK_COST);
+    setTokens(t => t - cost);
     const pack = [];
     for (let i = 0; i < CARDS_PER_PACK; i++) {
       let totalW = 0; for (const c of sc) totalW += c.weight || 100;
@@ -1771,8 +1774,8 @@ export default function Trinity() {
 
         {/* Duel Lobby (Multiplayer) */}
         {tab === "duel" && !game && (
-          <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s" }}>
-            <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Duel</div>
+          <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s", zoom: 1.5 }}>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 40, color: T.white, lineHeight: 1 }}>Duel</div>
             <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
 
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
@@ -2500,7 +2503,7 @@ export default function Trinity() {
               </div>
               {(() => {
                 const sortCards = (cardsArray) => {
-                  const tOrder = { entity: 1, terrain: 2, equip: 3, blessing: 4, curse: 5 };
+                  const tOrder = { entity: 1, blessing: 2, curse: 3, equip: 4, terrain: 5 };
                   return [...cardsArray].sort((a, b) => {
                     if (deckSortMode === "rarity" && a.rarity !== b.rarity) return RO.indexOf(b.rarity) - RO.indexOf(a.rarity);
                     if (tOrder[a.type] !== tOrder[b.type]) return (tOrder[a.type] || 99) - (tOrder[b.type] || 99);
@@ -2562,7 +2565,7 @@ export default function Trinity() {
             <div style={{ display: "flex", gap: 3, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
               <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>CODEX</h2>
               <div style={{ marginLeft: "auto", display: "flex", gap: 1 }}>
-                {["all", "entity", "blessing", "curse", "terrain", "equip"].map(f => (
+                {["all", "entity", "blessing", "curse", "equip", "terrain"].map(f => (
                   <button key={f} onClick={() => setBF(f)} style={{
                     padding: "1px 5px", border: `1px solid ${bF === f ? (TC[f] || T.silver) : T.panelBorder}`,
                     background: bF === f ? (TC[f] || T.silver) + "10" : "transparent", borderRadius: 2,
@@ -2633,9 +2636,10 @@ export default function Trinity() {
         {/* ═══ PACKS — no rarity sliders, just pick set & rip ═══ */}
         {tab === "packs" && (
           <div style={{ animation: "fadeIn .3s", zoom: 1.5 }}>
+            {(() => { const packCost = sets[selSI]?.cost_per_pack ?? PACK_COST; return (<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <h2 style={{ fontFamily: FONT_UI, fontSize: 12, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>PACKS</h2>
-              <div style={{ fontFamily: FONT_UI, fontSize: 10, color: tokens >= PACK_COST ? T.silverBright : T.curse, fontWeight: 800, animation: tokenFlash ? "tokenGold 0.7s ease-out forwards" : "none" }}>{tokens} TOKENS</div>
+              <div style={{ fontFamily: FONT_UI, fontSize: 10, color: tokens >= packCost ? T.silverBright : T.curse, fontWeight: 800, animation: tokenFlash ? "tokenGold 0.7s ease-out forwards" : "none" }}>{tokens} TOKENS</div>
             </div>
             <div style={{ display: "flex", gap: 5, marginBottom: 20, flexWrap: "wrap", justifyContent: "center" }}>
               {sets.map((s, i) => (
@@ -2657,14 +2661,14 @@ export default function Trinity() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24, marginTop: 52 }}>
               {!packRes.length ? (
-                <button onClick={() => sets[selSI]?.cardIds?.length && tokens >= PACK_COST && ripPack(sets[selSI])}
-                  disabled={!sets[selSI]?.cardIds?.length || tokens < PACK_COST} style={{
+                <button onClick={() => sets[selSI]?.cardIds?.length && tokens >= packCost && ripPack(sets[selSI])}
+                  disabled={!sets[selSI]?.cardIds?.length || tokens < packCost} style={{
                     padding: "10px 40px", background: "transparent", borderRadius: 3, letterSpacing: 4,
-                    border: `1.5px solid ${sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? T.silverBright : T.panelBorder}`,
-                    cursor: sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? "pointer" : "not-allowed",
+                    border: `1.5px solid ${sets[selSI]?.cardIds?.length && tokens >= packCost ? T.silverBright : T.panelBorder}`,
+                    cursor: sets[selSI]?.cardIds?.length && tokens >= packCost ? "pointer" : "not-allowed",
                     fontFamily: FONT_TITLE, fontSize: 18,
-                    color: sets[selSI]?.cardIds?.length && tokens >= PACK_COST ? T.white : T.textDim,
-                  }}>{!sets[selSI]?.cardIds?.length ? "Empty Set" : tokens >= PACK_COST ? "Open Pack" : "Locked (1 Token)"}</button>
+                    color: sets[selSI]?.cardIds?.length && tokens >= packCost ? T.white : T.textDim,
+                  }}>{!sets[selSI]?.cardIds?.length ? "Empty Set" : tokens >= packCost ? `Open Pack (${packCost} Token${packCost !== 1 ? "s" : ""})` : `Locked (${packCost} Token${packCost !== 1 ? "s" : ""})`}</button>
               ) : (
                 <div style={{ display: "flex", gap: 16, flexWrap: "nowrap", justifyContent: "center" }}>
                   {packRes.map((card, i) => {
@@ -2693,7 +2697,8 @@ export default function Trinity() {
                     </div>);
                   })}</div>
               )}
-            </div></div>)}
+            </div></>); })()}
+          </div>)}
 
         {/* ═══ EDITOR — filterable, sortable, with image upload ═══ */}
         {(() => {
@@ -2713,7 +2718,7 @@ export default function Trinity() {
                 </select>
                 {/* Type filter */}
                 <div style={{ display: "flex", gap: 1 }}>
-                  {["all", "entity", "blessing", "curse", "terrain", "equip"].map(t => (
+                  {["all", "entity", "blessing", "curse", "equip", "terrain"].map(t => (
                     <button key={t} onClick={() => setEdF(p => ({ ...p, type: t }))} style={{
                       padding: "1px 5px", border: `1px solid ${edF.type === t ? (TC[t] || T.silver) : T.panelBorder}`,
                       background: edF.type === t ? (TC[t] || T.silver) + "10" : "transparent", borderRadius: 2,
