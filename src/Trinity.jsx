@@ -46,6 +46,7 @@ function adjFull(r, c) {
   return o;
 }
 function isTranscendent(c) { return (c.soul || 0) + (c.mind || 0) + (c.will || 0) === 0; }
+function isVoid(c) { return !c.soul && !c.mind && !c.will; } // strictly 0/0/0 — can purge terrain & traps
 function nextCardId(type, allCards) {
   const PREFIX = { entity: "ENT", blessing: "BLE", curse: "CUR", equip: "EQU", terrain: "TER" };
   const pfx = PREFIX[type] || "UNK";
@@ -343,7 +344,6 @@ const CAMPAIGN_SET_IDS = ["set_a", "set_c", "set_d", "set_g", "set_l", "set_q", 
 const ACTION_TYPES = {
   DRAW:      "DRAW",
   PLAY_BC:   "PLAY_BC",
-  FREE_DRAW: "FREE_DRAW",
   SUMMON:    "SUMMON",
   TERRAIN:   "TERRAIN",
   EQUIP:     "EQUIP",
@@ -440,11 +440,13 @@ export default function Trinity() {
   const gameStartRef = useRef(null);              // timestamp of current game start
   const endTurnRef = useRef(null);                // always-current ref to endTurn
   const [mTaken, setMTaken] = useState([]);
+  const mTakenRef = useRef([]);
   const curR = (mMode ? (mRole === "p1" ? "player" : "ai") : "player");
   const [mOppDeck, setMOppDeck] = useState(null);
   const [mWait, setMWait] = useState(false);
   const ws = useRef(null);
   const mRoleRef = useRef(null);
+  const aiPlanRef = useRef([]);
 
   const playSfx = useCallback((type, fromRemote = false) => {
     if (!audioEnabled || muted) return;
@@ -516,7 +518,6 @@ export default function Trinity() {
   const [log, setLog] = useState([]); const logRef = useRef(null); const [aiR, setAiR] = useState(false);
   const [pit, setPit] = useState({ player: [], ai: [] }); const [showPit, setShowPit] = useState(false);
   const [recentPit, setRecentPit] = useState([]);
-  const [freeDraw, setFreeDraw] = useState(false);
   const [inspCell, setInspCell] = useState(null);
 
   const [nc, setNc] = useState({
@@ -525,7 +526,7 @@ export default function Trinity() {
   });
   const [editDeck, setEditDeck] = useState(null);
   const [deckSortMode, setDeckSortMode] = useState("type"); // "type" or "rarity"
-  const [showAutoGen, setShowAutoGen] = useState(false);
+  const [showAutoGen, setShowAutoGen] = useState(false); // kept for compat but unused after forge move
   const [autoGenCfg, setAutoGenCfg] = useState({ count: 4, deckSize: DECK_SIZE, factionMode: "bless" });
   const [bF, setBF] = useState("all"); const [bSetF, setBSetF] = useState("all");
   const [bDet, setBDet] = useState(null); const [editN, setEditN] = useState(null);
@@ -533,8 +534,10 @@ export default function Trinity() {
   const [selSI, setSelSI] = useState(0);
   const [editCard, setEditCard] = useState(null);
   const [edF, setEdF] = useState({ set: "all", type: "all", rarity: "all", art: "all", sort: "id" }); // editor filters
-  const [forgeMode, setForgeMode] = useState("single"); // "single" or "generate"
+  const [forgeMode, setForgeMode] = useState("single");
   const [genMode, setGenMode] = useState("random"); // "random" or "permute"
+  const [genSeed, setGenSeed] = useState(42);
+  const [camSeed, setCamSeed] = useState(42);
   const [genImages, setGenImages] = useState({}); // { rowIndex: dataUrl }
   const dragRef = useRef(null); // for drag-swap in forge table
   const randSetColor = () => "#" + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, "0");
@@ -595,8 +598,22 @@ export default function Trinity() {
           mRoleRef.current = msg.role;
           setMRole(msg.role);
           setMTaken(msg.taken);
+          mTakenRef.current = msg.taken;
           if (msg.state) setGame(msg.state);
+          // Auto-assign a random icon, ensuring it differs from any already-taken alias
+          if (msg.role !== "spectator") {
+            const ICONS = ["📜", "🗝️", "🕯️", "🏺", "⏳", "🪔", "🪶"];
+            const takenAliases = Object.values(msg.aliases || {});
+            const pool = ICONS.filter(e => !takenAliases.includes(e));
+            const autoAlias = (pool.length > 0 ? pool : ICONS)[Math.floor(Math.random() * (pool.length || ICONS.length))];
+            setMAlias(autoAlias);
+            socket.send(JSON.stringify({ type: "set_alias", role: msg.role, alias: autoAlias }));
+          }
         } else if (msg.type === "room_update") {
+          const prev = mTakenRef.current;
+          const newJoiner = msg.taken.find(r => !prev.includes(r) && r !== mRoleRef.current);
+          if (newJoiner) enqF("OPPONENT ENTERED", { color: T.silverBright, icon: "⚔️" });
+          mTakenRef.current = msg.taken;
           setMTaken(msg.taken);
         } else if (msg.type === "deck_selected") {
           if (msg.role !== mRoleRef.current) {
@@ -624,7 +641,16 @@ export default function Trinity() {
             setActionLog(prev => [...prev.slice(-199), { ...msg.action, seq: msg.seq || 0, ts: Date.now(), remote: true }]);
           }
           if (msg.state) {
-            setGame(prev => (!prev || msg.state.seq >= (prev.seq || 0)) ? msg.state : prev);
+            const act = msg.action?.type;
+            if ((act === "SUMMON" || act === "TERRAIN") && msg.action?.row !== undefined) {
+              // Show animation first, then place entity as it fades — mirrors sender timing
+              const { row, col } = msg.action;
+              const interim = { ...msg.state, bd: msg.state.bd.map((r, ri) => r.map((cell, ci) => ri === row && ci === col ? null : cell)) };
+              setGame(prev => (!prev || interim.seq >= (prev.seq || 0)) ? interim : prev);
+              setTimeout(() => setGame(prev => (!prev || msg.state.seq >= (prev.seq || 0)) ? msg.state : prev), 1100);
+            } else {
+              setGame(prev => (!prev || msg.state.seq >= (prev.seq || 0)) ? msg.state : prev);
+            }
           }
         } else if (msg.type === "sync_anim") {
           if (msg.sender !== mRoleRef.current && msg.flash) {
@@ -702,7 +728,7 @@ export default function Trinity() {
       curse: Math.round(total * pctCurse / 100), terrain: Math.round(total * pctTerrain / 100), equip: Math.round(total * pctItem / 100)
     };
     counts.entity += total - Object.values(counts).reduce((a, b) => a + b, 0);
-    const rows = []; let seed = 42;
+    const rows = []; let seed = genSeed;
     const sR = () => { seed = (seed * 16807) % 2147483647; return (seed & 0x7fffffff) / 2147483647; };
 
     let perms = [];
@@ -788,7 +814,7 @@ export default function Trinity() {
     });
 
     return rows;
-  }, [gen, genMode]);
+  }, [gen, genMode, genSeed]);
 
   const campaignPreview = useMemo(() => {
     const lerp = (a, b, t) => a + (b - a) * t;
@@ -1045,9 +1071,9 @@ export default function Trinity() {
     if (crossedZero && !skipSfx) {
       playSfx("revenance");
       if (amt < 0 && g.pD.length && g.pRole === "light") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
-      else if (amt > 0 && g.aD.length && g.pRole === "light") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
+      else if (amt > 0 && g.aD.length && g.pRole === "light") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); }
       else if (amt > 0 && g.pD.length && g.pRole === "dark") { g.pH.push(...g.pD.splice(0, Math.min(2, g.pD.length))); addLog("⟐ AWAKENING"); enqF("AWAKENING", { color: T.balanced, border: T.balanced, icon: "A", iconFont: FONT_TITLE }); }
-      else if (amt < 0 && g.aD.length && g.pRole === "dark") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); enqF("REVENANCE", { color: T.balanced, border: T.balanced, icon: "R", iconFont: FONT_TITLE, sub: "Opponent" }); }
+      else if (amt < 0 && g.aD.length && g.pRole === "dark") { g.aH.push(...g.aD.splice(0, Math.min(2, g.aD.length))); addLog("⟐ REVENANCE"); }
       // Slow down the sequence slightly when these trigger
       if (fB.current) fB.current = true; // Wait for flash
     }
@@ -1159,13 +1185,13 @@ export default function Trinity() {
 
   // Auto-advance: when the active player runs out of actions, end the turn automatically
   useEffect(() => {
-    if (!game || game.ph !== "playing" || aiR || freeDraw) return;
+    if (!game || game.ph !== "playing" || aiR) return;
     if (game.act <= 0 && game.turn === curR) {
-      const t = setTimeout(() => endTurnRef.current?.(), 600);
+      const t = setTimeout(() => endTurnRef.current?.(), 1800);
       return () => clearTimeout(t);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.act, game?.turn, game?.ph, aiR, freeDraw, curR]);
+  }, [game?.act, game?.turn, game?.ph, aiR, curR]);
 
   function clr() { setSelH(null); setSelB(null); setHl([]); setMode(null); setTapTgt(null); setInspCell(null); }
   function forfeit() {
@@ -1211,6 +1237,13 @@ export default function Trinity() {
       } else {
         for (let r = 0; r < 2; r++) for (let col = 0; col < 5; col++) if (!game.bd[r][col]) cells.push([r, col]);
       }
+      // Void entity (0/0/0): can also purge terrain and traps anywhere on the board
+      if (isVoid(c)) {
+        for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) {
+          const cell = game.bd[r][col];
+          if (cell && (cell.cd?.type === "terrain" || cell.fd)) cells.push([r, col]);
+        }
+      }
       setHl(cells); setMode("summon");
     }
     else if (c.type === "blessing" || c.type === "curse") { setHl([]); setMode(c.type); }
@@ -1243,23 +1276,17 @@ export default function Trinity() {
     const pwr = cPwr(c);
     if (type === "blessing") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: c.image, video: c.video }); applyC(g, pwr); addLog(`Play: ${c.name || "Blessing"} (+${pwr}C)`); }
     else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: c.image, video: c.video }); applyC(g, -pwr); addLog(`Play: ${c.name || "Curse"} (−${pwr}C)`); }
-    toPit(c, mr); updateGame(g, { type: ACTION_TYPES.PLAY_BC, cardType: type, handIdx: selH, role: mr }); clr();
-    if (pwr === 1) setFreeDraw(true);
-  }
-  function doFreeDraw() {
-    if (!game || !freeDraw) return;
-    const mr = curR;
+    const draws = pwr === 1 ? 1 : 0;
     const mdk = mr === "player" ? "pD" : "aD";
-    const mhk = mr === "player" ? "pH" : "aH";
-    if (!game[mdk].length) { setFreeDraw(false); return; }
-    const g = { ...game, [mdk]: [...game[mdk]], [mhk]: [...game[mhk]] };
-    const drawn = g[mdk].shift();
-    g[mhk].push(drawn);
-    playSfx("draw");
-    enqF("DRAW", { color: T.silver, border: T.silverDim, image: drawn.image, sub: drawn.name || "Card" });
-    addLog(`Draw: ${drawn.name || "Card"} (free)`);
-    setFreeDraw(false);
-    updateGame(g, { type: ACTION_TYPES.FREE_DRAW });
+    g[mdk] = [...g[mdk]];
+    for (let di = 0; di < draws && g[mdk].length; di++) {
+      const drawn = g[mdk].shift();
+      g[mhk].push(drawn);
+      playSfx("draw");
+      enqF("DRAW", { color: T.silver, border: T.silverDim, image: drawn.image, sub: drawn.name || "Card" });
+      addLog(`Draw: ${drawn.name || "Card"} (free)`);
+    }
+    toPit(c, mr); updateGame(g, { type: ACTION_TYPES.PLAY_BC, cardType: type, handIdx: selH, role: mr }); clr();
   }
   function doSetTrap() {
     if (!game || selH === null) return;
@@ -1290,12 +1317,31 @@ export default function Trinity() {
       const cost = mode === "terrain" ? 2 : 1;
       if (game.act < cost) return;
       playSfx("action");
-      const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
-      const card = g[mhk].splice(selH, 1)[0];
-      g.bd[r][c] = { cd: card, ow: mr, fd: false, ib: { soul: 0, mind: 0, will: 0 } }; g.act -= cost;
-      enqF(mode === "summon" ? "SUMMON" : "TERRAIN", { color: T.silver, border: TC[card.type], image: card.image, video: card.video, sub: card.name });
-      addLog(`${mode === "summon" ? "Summon" : "Terrain"}: ${card.name || card.type}`);
-      updateGame(g, { type: mode === "summon" ? ACTION_TYPES.SUMMON : ACTION_TYPES.TERRAIN, row: r, col: c, handIdx: selH }); clr(); return;
+      const isSummon = mode === "summon";
+      const existing = game.bd[r][c];
+      const isPurge = isSummon && existing && (existing.cd?.type === "terrain" || existing.fd);
+      // Interim state: action spent + card removed from hand, but entity NOT yet on board
+      const gInterim = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
+      const card = gInterim[mhk].splice(selH, 1)[0];
+      gInterim.act -= cost;
+      if (isPurge) gInterim.bd[r][c] = null; // clear terrain/trap immediately in interim
+      setGame({ ...gInterim, seq: (gInterim.seq || 0) + 1 });
+      if (isPurge) {
+        toPit(existing.cd, existing.ow);
+        enqF("PURGE", { color: TC.terrain, border: TC.terrain, icon: "✕", image: card.image, sub: card.name });
+        addLog(`Purge: ${existing.cd?.name || existing.cd?.type}`);
+      } else {
+        enqF(isSummon ? "SUMMON" : "TERRAIN", { color: T.silver, border: TC[card.type], image: card.image, video: card.video, sub: card.name });
+        addLog(`${isSummon ? "Summon" : "Terrain"}: ${card.name || card.type}`);
+      }
+      clr();
+      // Place entity on board as animation fades (~2/3 through the 1800ms flash)
+      setTimeout(() => {
+        const gFull = { ...gInterim, bd: gInterim.bd.map(row => [...row]) };
+        gFull.bd[r][c] = { cd: card, ow: mr, fd: false, ib: { soul: 0, mind: 0, will: 0 } };
+        updateGame(gFull, { type: isSummon ? ACTION_TYPES.SUMMON : ACTION_TYPES.TERRAIN, row: r, col: c, handIdx: selH });
+      }, 1100);
+      return;
     }
     if (mode === "equip" && selH !== null && isH) {
       const g = { ...game, [mhk]: [...game[mhk]], bd: game.bd.map(row => [...row]) };
@@ -1310,8 +1356,7 @@ export default function Trinity() {
     }
     if (cell?.ow === mr && cell.fd && !mode) {
       if (game.flips >= 2) { addLog("Max 2 flips per turn reached."); return; }
-      const cost = game.flips === 0 ? 1 : 0;
-      if (game.act < cost) { addLog("Need 1 action for first flip."); return; }
+      const cost = 0;
 
       const pwr = cPwr(cell.cd);
       const ready = (cell.prm || 0) <= 0;
@@ -1393,7 +1438,6 @@ export default function Trinity() {
     if (nextDeck.length) { nextHand.push(nextDeck.shift()); playSfx("draw"); }
 
     flipSets(g, nextTurn); g.tn++;
-    setFreeDraw(false);
 
     if (mMode) {
       updateGame(g, { type: ACTION_TYPES.END_TURN }); clr();
@@ -1425,158 +1469,241 @@ export default function Trinity() {
     URL.revokeObjectURL(url);
   }
 
+  // ─── AI Planner — pure helpers (no React side-effects) ──────────────────────
+  function aiClone(s) {
+    return { ...s, bd: s.bd.map(row => row.map(c => c ? { ...c, ib: { ...(c.ib||{}) } } : null)), aH: [...s.aH], pH: [...s.pH], aD: [...s.aD], pD: [...s.pD] };
+  }
+  function aiApplyC(s, amt) {
+    s.c = Math.max(-C_MAX, Math.min(C_MAX, s.c + amt));
+    if (s.c >= C_MAX) { s.ph = "over"; s.win = s.pRole === "light" ? "player" : "ai"; }
+    else if (s.c <= -C_MAX) { s.ph = "over"; s.win = s.pRole === "dark" ? "player" : "ai"; }
+  }
+  function aiActions(s) {
+    if (s.act <= 0 || s.ph !== "playing") return [];
+    const aiPos = s.pRole === "dark", acts = [];
+    for (let i = 0; i < s.aH.length; i++) {
+      const c = s.aH[i]; if (c.type !== "blessing" && c.type !== "curse") continue;
+      const v = c.type === "blessing" ? cPwr(c) : -cPwr(c);
+      const nC = Math.max(-C_MAX, Math.min(C_MAX, s.c + v));
+      acts.push({ type: "PLAY_SPELL", handIdx: i, card: c, isLethal: (aiPos && nC >= C_MAX) || (!aiPos && nC <= -C_MAX), cVal: v });
+    }
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
+      const aS = getEff(cl.cd, s.bd, r, c, cl.ib);
+      for (const [tr, tc] of (isTranscendent(cl.cd) ? adjFull(r, c) : adj(r, c, 1))) {
+        const tg = s.bd[tr]?.[tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
+        if (!canReach(r, c, tr, tc, s.bd)) continue;
+        const dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
+        let bStat = null, bVal = -Infinity;
+        for (const st of STAT_DEFS) { const res = resolveCombat(aS, dS, st.key); const v2 = res.winner === "attacker" ? res.dmg * 3 + 15 : (res.winner === "tie" ? 0 : -res.dmg - 5); if (v2 > bVal) { bVal = v2; bStat = { stat: st.key, res, val: v2 }; } }
+        if (bStat) acts.push({ type: "ATTACK", fromRow: r, fromCol: c, toRow: tr, toCol: tc, ...bStat });
+      }
+    }
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
+      for (const [nr, nc] of (isTranscendent(cl.cd) ? adjFull(r, c) : adj(r, c, 1))) {
+        const tgt = s.bd[nr]?.[nc]; if (tgt && (!tgt.fd || tgt.ow === "ai")) continue;
+        if (cl.summonedThisTurn && nr <= r) continue;
+        acts.push({ type: "MOVE", fromRow: r, fromCol: c, toRow: nr, toCol: nc, cl });
+      }
+    }
+    for (let hi = 0; hi < s.aH.length; hi++) {
+      const card = s.aH[hi];
+      if (card.type === "entity") {
+        for (let r = 0; r <= 1; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c });
+        if (isVoid(card)) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { const cl = s.bd[r][c]; if (cl && (cl.cd?.type === "terrain" || cl.fd)) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c, isPurge: true }); } }
+      }
+      else if (card.type === "terrain" && s.act >= 2) { for (let r = 3; r <= 4; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "TERRAIN", handIdx: hi, card, row: r, col: c }); }
+      else if (card.type === "equip") { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { const cl = s.bd[r][c]; if (cl && cl.ow === "ai" && cl.cd.type === "entity" && !cl.fd) acts.push({ type: "EQUIP", handIdx: hi, item: card, row: r, col: c }); } }
+      else if ((card.type === "blessing" || card.type === "curse")) { for (let r = 2; r <= 3; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SET_TRAP", handIdx: hi, card, row: r, col: c }); }
+    }
+    if (s.aD.length) acts.push({ type: "DRAW" });
+    return acts;
+  }
+  function aiApply(s, a) {
+    const pd = s.pRole === "light" ? 1 : -1;
+    if (a.type === "PLAY_SPELL") { s.aH.splice(a.handIdx, 1); const v = a.card.type === "blessing" ? cPwr(a.card) : -cPwr(a.card); aiApplyC(s, v); s.act--; if (cPwr(a.card) === 1 && s.aD.length) s.aH.push(s.aD.shift()); }
+    else if (a.type === "ATTACK") { const { fromRow: fr, fromCol: fc, toRow: tr, toCol: tc, res } = a; if (res.winner === "attacker") { s.bd[tr][tc] = null; aiApplyC(s, res.dmg * (-pd)); } else if (res.winner === "defender") { s.bd[fr][fc] = null; aiApplyC(s, res.dmg * pd); } s.act--; }
+    else if (a.type === "MOVE") { const t = s.bd[a.toRow][a.toCol]; if (t?.fd && t.ow === "player") s.bd[a.toRow][a.toCol] = null; s.bd[a.toRow][a.toCol] = s.bd[a.fromRow][a.fromCol]; s.bd[a.fromRow][a.fromCol] = null; s.act--; }
+    else if (a.type === "SUMMON") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true }; s.act--; }
+    else if (a.type === "TERRAIN") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } }; s.act -= 2; }
+    else if (a.type === "EQUIP") { const item = s.aH.splice(a.handIdx, 1)[0]; const cl = s.bd[a.row][a.col]; if (cl) { cl.ib = { ...cl.ib }; STAT_DEFS.forEach(st => { cl.ib[st.key] = (cl.ib[st.key] || 0) + (item[st.key] || 0); }); } s.act--; }
+    else if (a.type === "SET_TRAP") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: true, prm: 1 }; s.act--; }
+    else if (a.type === "DRAW") { if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; } }
+  }
+  function aiScore(s) {
+    if (s.ph === "over") return s.win === "ai" ? 1e6 : -1e6;
+    const aiPos = s.pRole === "dark";
+    let sc = (aiPos ? s.c : -s.c) * 80;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (!cl) continue;
+      if (cl.ow === "ai") {
+        if (cl.cd.type === "entity" && !cl.fd) {
+          sc += 22 + (4 - (Math.abs(r - 2) + Math.abs(c - 2))) * 7 + r * 5;
+          sc += STAT_DEFS.reduce((sum, st) => sum + Math.abs(cl.ib?.[st.key] || 0), 0) * 4;
+          let minD = 99;
+          for (let r2 = 0; r2 < 5; r2++) for (let c2 = 0; c2 < 5; c2++) { const nb = s.bd[r2][c2]; if (nb && nb.ow === "ai" && nb.cd.type === "entity" && !nb.fd && (r2 !== r || c2 !== c)) { const d = Math.abs(r - r2) + Math.abs(c - c2); if (d < minD) minD = d; } }
+          if (minD === 1) sc -= 10; else if (minD === 2) sc += 4;
+          const aS = getEff(cl.cd, s.bd, r, c, cl.ib);
+          for (const [tr, tc] of (isTranscendent(cl.cd) ? adjFull(r, c) : adj(r, c, 1))) {
+            const tg = s.bd[tr]?.[tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
+            const dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
+            const canWin = STAT_DEFS.some(st => resolveCombat(aS, dS, st.key).winner === "attacker");
+            sc += canWin ? 14 : -9;
+          }
+          // c=0 vulnerability: opponent gets free spells — heavy penalty for being adjacent to a stronger foe
+          if (s.c === 0) {
+            for (const [nr, nc] of adj(r, c, 1)) {
+              const opp = s.bd[nr]?.[nc]; if (!opp || opp.ow !== "player" || opp.cd.type !== "entity" || opp.fd) continue;
+              const opS = getEff(opp.cd, s.bd, nr, nc, opp.ib);
+              if (STAT_DEFS.some(st => Math.abs(aS[st.key]) < Math.abs(opS[st.key]))) { sc -= 60; break; }
+            }
+          }
+        }
+        if (cl.fd) sc += r >= 2 ? 12 : 5;
+        if (cl.cd.type === "terrain") sc += r >= 3 ? 16 : 7;
+      } else {
+        if (cl.cd.type === "entity" && !cl.fd) {
+          sc -= 18;
+          const dS = getEff(cl.cd, s.bd, r, c, cl.ib);
+          for (const [tr, tc] of (isTranscendent(cl.cd) ? adjFull(r, c) : adj(r, c, 1))) { const al = s.bd[tr]?.[tc]; if (al && al.ow === "ai" && al.cd.type === "entity" && !al.fd) sc -= 10; }
+        }
+      }
+    }
+    sc += (s.aH.length - s.pH.length) * 3 + s.aD.length * 0.5;
+    return sc;
+  }
+  function aiPlan(init) {
+    let bestScore = aiScore(init), bestSeq = [];
+    function search(s, seq) {
+      const sc = aiScore(s); if (sc > bestScore) { bestScore = sc; bestSeq = [...seq]; }
+      if (seq.length >= 3 || s.act <= 0 || s.ph !== "playing") return;
+      const acts = aiActions(s);
+      // Detect if player can win with spells from their current hand this turn
+      const pIsLight = s.pRole === "light";
+      const cToWin = pIsLight ? C_MAX - s.c : s.c + C_MAX;
+      const pWinSpells = s.pH.filter(c => pIsLight ? c.type === "blessing" : c.type === "curse").map(c => cPwr(c)).sort((a, b) => b - a).slice(0, 3);
+      const pCanWin = cToWin > 0 && pWinSpells.reduce((a, b) => a + b, 0) >= cToWin;
+      acts.forEach(a => { if (a.type === "PLAY_SPELL") a.isUrgent = pCanWin; });
+      acts.sort((a, b) => { const rank = x => x.isLethal ? 1000 : x.isUrgent ? 900 : x.type === "ATTACK" && x.val > 0 ? 100 + x.val : x.type === "SUMMON" ? 55 : x.type === "EQUIP" ? 45 : x.type === "MOVE" ? 40 : x.type === "TERRAIN" ? 35 : x.type === "PLAY_SPELL" ? 20 : x.type === "SET_TRAP" ? 10 : 2; return rank(b) - rank(a); });
+      const seen = {}; let tot = 0;
+      const lim = { ATTACK: 5, PLAY_SPELL: 2, MOVE: 6, SUMMON: 5, EQUIP: 4, TERRAIN: 3, SET_TRAP: 3, DRAW: 1 };
+      for (const a of acts) {
+        if (a.isLethal) { const s2 = aiClone(s); aiApply(s2, a); search(s2, [...seq, a]); continue; }
+        seen[a.type] = (seen[a.type] || 0) + 1; if (seen[a.type] > (lim[a.type] || 3) || tot++ > 18) continue;
+        const s2 = aiClone(s); aiApply(s2, a);
+        if (seq.length > 0 && aiScore(s2) < bestScore - 150) continue;
+        search(s2, [...seq, a]);
+      }
+    }
+    search(aiClone(init), []);
+    return bestSeq;
+  }
+  // ─── AI Execution ─────────────────────────────────────────────────────────────
   function runAI(g, idx) {
-    if (g.ph === "over" || idx >= 5 || g.act <= 0) {
-      g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player");
-      if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); }
-      chkPressure(g); setGame({ ...g }); setAiR(false); return;
+    if (g.ph === "over") { setAiR(false); return; }
+    function endAITurn(s) {
+      s.turn = "player"; s.act = 3; s.flips = 0; flipSets(s, "player"); s.tn++;
+      if (s.pD.length) { s.pH = [...s.pH]; s.pD = [...s.pD]; s.pH.push(s.pD.shift()); playSfx("draw"); }
+      chkPressure(s); setGame({ ...s }); setAiR(false);
     }
-    let s = { ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD] };
-    const aiWantsPlus = s.pRole === "dark";
-    const checkLethal = (amt) => {
-      const nextC = Math.min(Math.max(s.c + amt, -C_MAX), C_MAX);
-      return (aiWantsPlus && nextC >= C_MAX) || (!aiWantsPlus && nextC <= -C_MAX);
-    };
-    const delay = (ms = 1200) => setTimeout(() => runAI(s, idx + 1), ms);
-
-    // --- 1. LETHAL CHECK ---
-    const spells = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-    for (const sp of spells) {
-      const v = sp.type === "blessing" ? cPwr(sp) : -cPwr(sp);
-      if (checkLethal(v)) {
-        s.aH.splice(s.aH.indexOf(sp), 1); s.act--; playSfx("action");
-        if (sp.type === "blessing") { enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image }); applyC(s, cPwr(sp)); }
-        else { enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image }); applyC(s, -cPwr(sp)); }
+    if (idx === 0) { aiPlanRef.current = aiPlan(g); }
+    const planned = aiPlanRef.current[idx];
+    if (!planned || g.act <= 0 || idx >= 10) {
+      endAITurn({ ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD], pH: [...g.pH], pD: [...g.pD] }); return;
+    }
+    let s = { ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD], pH: [...g.pH], pD: [...g.pD] };
+    const delay = (ms = 1500) => setTimeout(() => runAI(s, idx + 1), ms);
+    switch (planned.type) {
+      case "PLAY_SPELL": {
+        const hi = s.aH.findIndex(c => c.id === planned.card.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const sp = s.aH[hi];
+        const v = sp.type === "blessing" ? cPwr(sp) : -cPwr(sp);
+        s.aH.splice(hi, 1); s.act--;
+        if (sp.type === "blessing") enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image });
+        else enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image });
+        playSfx("action"); applyC(s, v);
         if (cPwr(sp) === 1 && s.aD.length) { const d = s.aD.shift(); s.aH.push(d); addLog(`Opp Draw (free)`); }
-        toPit(sp, "ai"); addLog(`Opp LETHAL: ${sp.name || sp.type}`); setGame({ ...s }); delay(); return;
+        toPit(sp, "ai"); addLog(`Opp ${sp.type}: ${sp.name || sp.type}`);
+        setGame({ ...s }); delay(); break;
       }
-    }
-
-    // --- 2. BOARD ATTACK ---
-    let bestAtk = null, maxD = -999;
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
-      const atkCells = aura(cl.cd) === 0 ? adjFull(r, c) : adj(r, c, 1);
-      for (const [tr, tc] of atkCells.filter(([tr, tc]) => canReach(r, c, tr, tc, s.bd))) {
-        const tg = s.bd[tr][tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "entity" || tg.fd) continue;
-        const aS = getEff(cl.cd, s.bd, r, c, cl.ib), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
-        STAT_DEFS.forEach(st => {
-          const res = resolveCombat(aS, dS, st.key);
-          const val = res.winner === "attacker" ? res.dmg : (res.winner === "tie" ? -1 : -20 - res.dmg);
-          if (val > maxD) { maxD = val; bestAtk = { r, c, tr, tc, stat: st.key, cl, tg, aS, dS, res }; }
-        });
+      case "ATTACK": {
+        const { fromRow: fr, fromCol: fc, toRow: tr, toCol: tc, stat } = planned;
+        const atk = s.bd[fr]?.[fc]; const def = s.bd[tr]?.[tc];
+        if (!atk || !def) { endAITurn(s); return; }
+        const aS = getEff(atk.cd, s.bd, fr, fc, atk.ib), dS = getEff(def.cd, s.bd, tr, tc, def.ib);
+        const res = resolveCombat(aS, dS, stat);
+        const aiBO = { atkCard: atk.cd, defCard: def.cd, sub: `Opp ${stat.toUpperCase()} |${Math.abs(aS[stat])}| vs |${Math.abs(dS[stat])}|` };
+        if (res.winner === "attacker") { s.bd[tr][tc] = null; toPit(def.cd, "player"); }
+        else if (res.winner === "defender") { s.bd[fr][fc] = null; toPit(atk.cd, "ai"); }
+        s.act--;
+        combatC(s, res.dmg, res.winningStat, "ai", aiBO, atk.cd, def.cd, true, `⚔ ${atk.cd.name || "Atk"} > ${def.cd.name || "Def"}`, stat);
+        setGame({ ...s }); delay(2000); break;
       }
-    }
-    if (bestAtk && maxD >= 0) {
-      const { tr, tc, stat, cl, tg, aS, dS, res } = bestAtk;
-      const aiBO = { atkCard: cl.cd, defCard: tg.cd, sub: `Opp ${stat.toUpperCase()} |${Math.abs(aS[stat])}| vs |${Math.abs(dS[stat])}|` };
-      s.bd[tr][tc] = null; toPit(tg.cd, "player"); s.act--;
-      combatC(s, res.dmg, res.winningStat, "ai", aiBO, cl.cd, tg.cd, true, `⚔ ${cl.cd.name || "Atk"} > ${tg.cd.name || "Def"}`, stat);
-      setGame({ ...s }); delay(1600); return;
-    }
-
-    // --- 3. SCORING PHASE (MOVING / SUMMONING) ---
-    const evalPos = (r, c, card, isMove) => {
-      let score = 0;
-      // Preference for center
-      const distToCenter = Math.abs(r - 2) + Math.abs(c - 2);
-      score += (4 - distToCenter) * 10;
-      // Spreading out from allied entities
-      let minDistAllied = 99;
-      for (let cr = 0; cr < 5; cr++) for (let cc = 0; cc < 5; cc++) {
-        const cl = s.bd[cr][cc];
-        if (cl && cl.ow === "ai" && cl.cd.type === "entity" && (cr !== r || cc !== c)) {
-          const d = Math.abs(r - cr) + Math.abs(cc - cc);
-          if (d < minDistAllied) minDistAllied = d;
+      case "MOVE": {
+        const { fromRow: fr, fromCol: fc, toRow: tr, toCol: tc } = planned;
+        const cl = s.bd[fr]?.[fc]; if (!cl) { endAITurn(s); return; }
+        const tgt = s.bd[tr][tc]; if (tgt?.fd && tgt.ow === "player") s.bd[tr][tc] = null;
+        s.bd[tr][tc] = cl; s.bd[fr][fc] = null;
+        chkTraps(s, tr, tc, "ai"); s.act--;
+        addLog(`Opp Move: ${cl.cd.name || "Entity"}`); setGame({ ...s }); delay(); break;
+      }
+      case "SUMMON": {
+        const hi = s.aH.findIndex(c => c.id === planned.card.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const card = s.aH[hi]; const { row: r, col: c } = planned;
+        const existing = s.bd[r][c];
+        const isPurge = existing && (existing.cd?.type === "terrain" || existing.fd);
+        if (existing && !isPurge) { endAITurn(s); return; }
+        if (isPurge) s.bd[r][c] = null; // clear before animation
+        s.aH.splice(hi, 1); s.act--;
+        playSfx("action");
+        if (isPurge) {
+          enqF("PURGE", { color: TC.terrain, border: TC.terrain, icon: "✕", image: card.image, sub: card.name });
+          addLog(`Opp Purge: ${existing.cd?.name || existing.cd?.type}`);
+        } else {
+          enqF("SUMMON", { color: T.entity, border: TC[card.type] || T.entity, image: card.image, sub: card.name });
+          addLog(`Opp Summon: ${card.name || "Entity"}`);
         }
+        setGame({ ...s });
+        setTimeout(() => {
+          s.bd[r][c] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true };
+          setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 300);
+        }, 1100); break;
       }
-      if (minDistAllied === 1) score -= 15; // Don't cluster
-      else if (minDistAllied === 2) score += 5;
-      else if (minDistAllied === 99) score += 10; // First one on board is fine
-
-      // Defusing traps
-      if (s.bd[r][c]?.ow === "player" && s.bd[r][c]?.fd) score += 60;
-
-      // Aggression: can we attack someone from here next turn?
-      const atkCells = aura(card) === 0 ? adjFull(r, c) : adj(r, c, 1);
-      let targets = 0;
-      atkCells.forEach(([tr, tc]) => {
-        const tg = s.bd[tr][tc];
-        if (tg && tg.ow === "player" && tg.cd.type === "entity" && !tg.fd) {
-          const aS = getEff(card, s.bd, r, c, {}), dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
-          const hasGoodMatchup = STAT_DEFS.some(st => Math.abs(aS[st.key]) > Math.abs(dS[st.key]));
-          if (hasGoodMatchup) targets += 20; else targets += 5;
-        }
-      });
-      score += targets;
-
-      // Resource Guard: Avoid moving adjacent if we can't attack now and they can attack us next turn
-      if (isMove && s.act < 2) {
-        adj(r, c, 1).forEach(([ar, ac]) => {
-          const tg = s.bd[ar][ac];
-          if (tg && tg.ow === "player" && tg.cd.type === "entity" && !tg.fd) score -= 40;
-        });
+      case "TERRAIN": {
+        const hi = s.aH.findIndex(c => c.id === planned.card.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const card = s.aH[hi]; const { row: r, col: c } = planned;
+        s.aH.splice(hi, 1); s.bd[r][c] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } };
+        s.act -= 2; addLog(`Opp Terrain: ${card.name || "Terrain"}`); setGame({ ...s }); delay(); break;
       }
-
-      return score;
-    };
-
-    // Evaluate Moves
-    let bestMove = null, bestMoveScr = -999;
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "entity" || cl.fd) continue;
-      adj(r, c).forEach(([nr, nc]) => {
-        if (s.bd[nr][nc] && (!s.bd[nr][nc].fd || s.bd[nr][nc].ow === "ai")) return;
-        if (cl.summonedThisTurn && nr <= r) return;
-        const scr = evalPos(nr, nc, cl.cd, true);
-        if (scr > bestMoveScr) { bestMoveScr = scr; bestMove = { fr: r, fc: c, tr: nr, tc: nc, cl }; }
-      });
-    }
-
-    // Evaluate Summons
-    let bestSum = null, bestSumScr = -999;
-    const handEnts = s.aH.filter(x => x.type === "entity");
-    if (handEnts.length) {
-      const card = handEnts[0];
-      for (let r = 0; r <= 1; r++) for (let c = 0; c < 5; c++) {
-        if (s.bd[r][c]) continue;
-        const scr = evalPos(r, c, card, false);
-        if (scr > bestSumScr) { bestSumScr = scr; bestSum = { r, c, card }; }
+      case "EQUIP": {
+        const hi = s.aH.findIndex(c => c.id === planned.item.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const item = s.aH.splice(hi, 1)[0]; const cl = s.bd[planned.row]?.[planned.col];
+        if (!cl) { endAITurn(s); return; }
+        cl.ib = { ...cl.ib }; STAT_DEFS.forEach(st => { cl.ib[st.key] = (cl.ib[st.key] || 0) + (item[st.key] || 0); });
+        s.act--; addLog(`Opp Equip: ${item.name || "Equip"}`); setGame({ ...s }); delay(); break;
       }
-    }
-
-    // Decision
-    if (bestMove && (bestMoveScr > bestSumScr || !bestSum)) {
-      const { fr, fc, tr, tc, cl } = bestMove; s.bd[fr][fc] = null;
-      chkTraps(s, tr, tc, "ai"); s.bd[tr][tc] = cl; s.act--;
-      addLog(`Opp Move: ${cl.cd.name || "Entity"}`); setGame({ ...s }); delay(); return;
-    } else if (bestSum) {
-      const { r, c, card } = bestSum; s.aH.splice(s.aH.indexOf(card), 1);
-      s.bd[r][c] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true };
-      s.act--; playSfx("action"); enqF("SUMMON", { color: T.entity, border: TC[card.type] || T.entity, image: card.image, sub: card.name });
-      addLog(`Opp Summon: ${card.name || "Entity"}`); setGame({ ...s }); setTimeout(() => runAI(s, idx + 1), 1400); return;
-    }
-
-    // Economy
-    const trappable = s.aH.filter(x => x.type === "blessing" || x.type === "curse");
-    if (trappable.length && s.act >= 1) {
-      const emp = []; for (let r = 1; r <= 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) emp.push([r, c]);
-      if (emp.length) {
-        const card = trappable[0]; s.aH.splice(s.aH.indexOf(card), 1);
-        const [sr, sc] = emp[Math.floor(Math.random() * emp.length)]; s.bd[sr][sc] = { cd: card, ow: "ai", fd: true, prm: 1 };
+      case "SET_TRAP": {
+        const hi = s.aH.findIndex(c => c.id === planned.card.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const card = s.aH[hi]; const { row: r, col: c } = planned;
+        if (s.bd[r][c]) { endAITurn(s); return; }
+        s.aH.splice(hi, 1); s.bd[r][c] = { cd: card, ow: "ai", fd: true, prm: 1 };
         playSfx("draw"); enqF("SET", { color: T.silverDim, border: T.silverDim, icon: "S" });
-        addLog(`Opp Set: Trap`); setGame({ ...s }); delay(); return;
+        s.act--; addLog(`Opp Set: Trap`); setGame({ ...s }); delay(); break;
       }
+      case "DRAW": {
+        if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; }
+        playSfx("draw"); enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
+        addLog(`Opp Draw`); setGame({ ...s }); delay(1000); break;
+      }
+      default:
+        endAITurn(s);
     }
-    if (s.aD.length) {
-      playSfx("draw"); s.aH.push(s.aD.shift()); s.act--; enqF("DRAW", { color: T.silverDim, border: T.silverDim, icon: "D" });
-      addLog(`Opp Draw`); setGame({ ...s }); delay(1000); return;
-    }
-
-    // End Turn
-    g.turn = "player"; g.act = 3; g.flips = 0; flipSets(g, "player"); g.tn++;
-    if (g.pD.length) { g.pH = [...g.pH]; g.pD = [...g.pD]; g.pH.push(g.pD.shift()); playSfx("draw"); }
-    chkPressure(g); setGame({ ...g }); setAiR(false);
   }
 
   // Forge / import
@@ -1633,12 +1760,18 @@ export default function Trinity() {
   }
 
   // ═══ CARD GENERATION HELPER (pure — no state reads) ═══
+  function mkRNG(seed) {
+    let s = (seed || 42) & 0x7fffffff || 1;
+    return () => { s = (s * 16807) % 2147483647; return (s & 0x7fffffff) / 2147483647; };
+  }
+
   function genCardsForParams({ name, total, powerMin, powerMax,
     pctEntity, pctBless, pctCurse, pctTerrain, pctItem,
     blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax,
     equipPwrMin = 1, equipPwrMax = 3, terrPwrMin = 1, terrPwrMax = 3,
     rarCommon, rarUncommon, rarRare, rarLegendary,
-    ensureTypes, images = {}, mode = "random", ts: tsIn, counters = {} }) {
+    ensureTypes, images = {}, mode = "random", ts: tsIn, counters = {}, rng: rngIn = null }) {
+    const rng = rngIn || Math.random;
     const ts = tsIn !== undefined ? tsIn : Date.now();
     const newCards = [];
 
@@ -1649,17 +1782,17 @@ export default function Trinity() {
     }
     function randStats(pMin, pMax) {
       for (let a = 0; a < 100; a++) {
-        const s = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX, m = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX, w = Math.floor(Math.random() * (STAT_MAX * 2 + 1)) - STAT_MAX;
+        const s = Math.floor(rng() * (STAT_MAX * 2 + 1)) - STAT_MAX, m = Math.floor(rng() * (STAT_MAX * 2 + 1)) - STAT_MAX, w = Math.floor(rng() * (STAT_MAX * 2 + 1)) - STAT_MAX;
         if (Math.abs(s) + Math.abs(m) + Math.abs(w) >= pMin && Math.abs(s) + Math.abs(m) + Math.abs(w) <= pMax) return { soul: s, mind: m, will: w };
       } return { soul: 1, mind: 1, will: 0 };
     }
 
     function gradFor(type, o) {
       const h = type === "blessing" ? 210 : type === "curse" ? 350 : type === "terrain" ? 80 : type === "equip" ? 30 : o > 0 ? 40 : o < 0 ? 280 : 170;
-      const sat = type === "entity" ? 20 : 15, b = 18 + Math.floor(Math.random() * 22);
-      return [`hsl(${h},${sat + Math.floor(Math.random() * 10)}%,${b}%)`, `hsl(${h},${sat}%,${Math.floor(b / 2)}%)`];
+      const sat = type === "entity" ? 20 : 15, b = 18 + Math.floor(rng() * 22);
+      return [`hsl(${h},${sat + Math.floor(rng() * 10)}%,${b}%)`, `hsl(${h},${sat}%,${Math.floor(b / 2)}%)`];
     }
-    function rPwr(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+    function rPwr(min, max) { return min + Math.floor(rng() * (max - min + 1)); }
     function nextCardId(type) {
       if (!counters[type]) counters[type] = 1;
       return `${TYPE_PREFIX[type] || "GEN"}-${String(counters[type]++).padStart(5, "0")}`;
@@ -1736,7 +1869,7 @@ export default function Trinity() {
   function generateSet() {
     const ts = Date.now();
     const counters = computeStartCounters(cardPool);
-    const newCards = genCardsForParams({ ...gen, images: genImages, mode: genMode, ts, counters });
+    const newCards = genCardsForParams({ ...gen, images: genImages, mode: genMode, ts, counters, rng: mkRNG(genSeed) });
     setCardPool(prev => [...prev, ...newCards]);
     setSets(prev => [...prev, { id: "gen_" + ts, name: gen.name, color: gen.color, cardIds: newCards.map(c => c.id) }]);
     setGen(p => ({ ...p, color: randSetColor() }));
@@ -1749,6 +1882,7 @@ export default function Trinity() {
     const lerp = (a, b, t) => a + (b - a) * t;
     const n = CAMPAIGN_SET_IDS.length;
     const ts = Date.now();
+    const camRng = mkRNG(camSeed);
     const allNewCards = [];
     const setCardMap = {};
     const counters = computeStartCounters(cardPool); // shared across all sets, increments continuously
@@ -1805,7 +1939,7 @@ export default function Trinity() {
         blessPwrMin, blessPwrMax, cursePwrMin, cursePwrMax,
         equipPwrMin, equipPwrMax, terrPwrMin, terrPwrMax,
         rarCommon, rarUncommon, rarRare, rarLegendary,
-        ensureTypes: camGen.ensureTypes, images: {}, mode: "random", ts: ts + si * 1000, counters,
+        ensureTypes: camGen.ensureTypes, images: {}, mode: "random", ts: ts + si * 1000, counters, rng: camRng,
       });
       allNewCards.push(...newCards);
       setCardMap[setId] = newCards.map(c => c.id);
@@ -1978,7 +2112,6 @@ export default function Trinity() {
       newDecks.push({ name, cards });
     }
     setDecks(p => [...p, ...newDecks]);
-    setShowAutoGen(false);
   }
 
   return (
@@ -2083,31 +2216,11 @@ export default function Trinity() {
         {/* Duel Lobby (Multiplayer) */}
         {tab === "duel" && !game && (
           <div style={{ textAlign: "center", padding: "24px 16px", animation: "fadeIn .5s", zoom: 1.5 }}>
-            <div style={{ fontFamily: FONT_TITLE, fontSize: 40, color: T.white, lineHeight: 1 }}>Duel</div>
-            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 14, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
-
-            {/* Emoji identity picker */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 6, color: T.textDim, fontFamily: FONT_UI, letterSpacing: 3, marginBottom: 6, fontWeight: 700 }}>IDENTITY</div>
-              <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                {["📜", "🗝️", "🕯️", "🏺", "⏳", "🪔", "🪶"].map(e => (
-                  <button key={e} onClick={() => {
-                    const next = mAlias === e ? null : e;
-                    setMAlias(next);
-                    if (ws.current?.readyState === WebSocket.OPEN && mRole && mRole !== "spectator") {
-                      ws.current.send(JSON.stringify({ type: "set_alias", role: mRole, alias: next || "" }));
-                    }
-                  }} style={{
-                    fontSize: 20, background: "none", border: `1.5px solid ${mAlias === e ? T.silverBright : "transparent"}`,
-                    borderRadius: 6, padding: "2px 4px", cursor: "pointer", opacity: mAlias === e ? 1 : 0.45,
-                    transition: "all .15s", lineHeight: 1.3,
-                  }}>{e}</button>
-                ))}
-              </div>
-            </div>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 48, color: T.white, lineHeight: 1 }}>Duel</div>
+            <div style={{ fontFamily: FONT_UI, fontSize: 8, color: T.silverDim, letterSpacing: 7, marginTop: 2, marginBottom: 18, fontWeight: 600 }}>TWO HEAVENS UNITED</div>
 
             <div style={{ maxWidth: 450, margin: "0 auto 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
-              {[["PLAYER 1 (GOOD)", selDI, setSelDI, T.silverBright, "p1"], ["PLAYER 2 (EVIL)", oppDI, setOppDI, T.curse, "p2"]].map(([lb, sel, setSel, col, role], sideIdx) => {
+              {[["Us (GOOD)", selDI, setSelDI, T.silverBright, "p1"], ["Them (EVIL)", oppDI, setOppDI, T.curse, "p2"]].map(([lb, sel, setSel, col, role], sideIdx) => {
                 const isTaken = mTaken.includes(role);
                 const isMyRole = mRole === role;
                 const showLock = isTaken && !isMyRole;
@@ -2117,7 +2230,7 @@ export default function Trinity() {
                     <div style={{ fontSize: 7, color: T.textDim, fontFamily: FONT_UI, letterSpacing: 2, marginBottom: 3, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
                       <span>{lb}</span>
                       {isTaken && <span style={{ color: isMyRole ? T.bless : T.danger }}>
-                        {isMyRole ? `${mAlias || ""} YOU` : `${mOppAlias || ""} OPP`}
+                        {isMyRole ? `${mAlias || ""} You` : `${mOppAlias || ""}`}
                       </span>}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -2164,13 +2277,13 @@ export default function Trinity() {
                 cursor: mWait || !mRole || mRole === "spectator" ? "default" : "pointer", fontFamily: FONT_TITLE, fontSize: 16, color: T.white, letterSpacing: 4,
                 opacity: mWait || !mRole || mRole === "spectator" ? 0.4 : 1
               }}>
-                {mWait ? "WAITING..." : "FORGE BATTLE"}
+                {mWait ? "WAITING..." : "Reckoning"}
               </button>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: mRole ? T.bless : T.danger }} />
                 <div style={{ fontSize: 8, color: T.silverBright, fontFamily: FONT_UI, letterSpacing: 2 }}>
-                  {mRole ? `STATUS: CONNECTED AS ${mRole.toUpperCase()}` : "STATUS: CONNECTING..."}
+                  {mRole ? `STATUS: CONNECTED ${mRole === "p1" ? "FIRST" : mRole === "p2" ? "LAST" : mRole.toUpperCase()}` : "STATUS: CONNECTING..."}
                 </div>
                 <button onClick={() => {
                   if (confirm("Hard reset will kick ALL players and clear the game. Continue?")) {
@@ -2179,6 +2292,25 @@ export default function Trinity() {
                 }} style={{
                   background: "transparent", border: `1px solid ${T.danger}`, color: T.danger, fontSize: 6, padding: "2px 6px", borderRadius: 2, cursor: "pointer", opacity: 0.6, marginLeft: 8
                 }}>HARD RESET ROOM</button>
+              </div>
+
+              {/* Identity picker — override auto-assigned icon */}
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                  {["📜", "🗝️", "🕯️", "🏺", "⏳", "🪔", "🪶"].map(e => (
+                    <button key={e} onClick={() => {
+                      const next = mAlias === e ? null : e;
+                      setMAlias(next);
+                      if (ws.current?.readyState === WebSocket.OPEN && mRole && mRole !== "spectator") {
+                        ws.current.send(JSON.stringify({ type: "set_alias", role: mRole, alias: next || "" }));
+                      }
+                    }} style={{
+                      fontSize: 18, background: "none", border: `1.5px solid ${mAlias === e ? T.silverBright : "transparent"}`,
+                      borderRadius: 6, padding: "2px 4px", cursor: "pointer", opacity: mAlias === e ? 1 : 0.35,
+                      transition: "all .15s", lineHeight: 1.3,
+                    }}>{e}</button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -2349,7 +2481,6 @@ export default function Trinity() {
                     <button onClick={() => playBC(mode)} style={B(mode === "blessing" ? T.bless : T.curse)}>
                       {mode === "blessing" ? "△" : "▽"} Play ({game.c === 0 ? "FREE" : "1"})</button>
                     <button onClick={doSetTrap} style={B(T.silverDim)}>▼ Trap (FREE)</button></>)}
-                  {freeDraw && (<button onClick={doFreeDraw} style={B(T.silver)}>⊕ Free Draw</button>)}
                   {mode === "chooseStat" && tapTgt && (
                     <div style={{ display: "flex", gap: 2 }}>
                       {STAT_DEFS.map(s => (<button key={s.key} onClick={() => resolveTap(s.key)} style={{
@@ -2382,15 +2513,13 @@ export default function Trinity() {
           <div style={{ animation: "fadeIn .3s" }}>
             {/* Mode toggle */}
             <div style={{ display: "flex", gap: 2, marginBottom: 8 }}>
-              {[["single", "Card"], ["generate", "Set"], ["campaign", "Campaign"]].map(([m, l]) => (
+              {[["single", "Card"], ["generate", "Set"], ["campaign", "Campaign"], ["decks", "Decks"]].map(([m, l]) => (
                 <button key={m} onClick={() => setForgeMode(m)} style={{
                   padding: "5px 14px", border: `1px solid ${forgeMode === m ? T.silverBright : T.panelBorder}`,
                   background: forgeMode === m ? T.silver + "12" : T.panel, borderRadius: 3, cursor: "pointer",
                   color: forgeMode === m ? T.silverBright : T.textDim, fontFamily: FONT_UI, fontSize: 9, fontWeight: 700,
                 }}>{l}</button>
               ))}
-              <label style={{ marginLeft: "auto", padding: "5px 12px", border: `1px solid ${T.silverDim}`, borderRadius: 3, cursor: "pointer", fontFamily: FONT_UI, fontSize: 8, color: T.silver, fontWeight: 700 }}>
-                Bulk Image Import<input type="file" accept="image/*" multiple onChange={handleBulk} style={{ display: "none" }} /></label>
             </div>
 
             {forgeMode === "single" ? (
@@ -2539,10 +2668,17 @@ export default function Trinity() {
                       GUARANTEE AT LEAST 1 OF EACH TYPE PER RARITY
                     </label>
                   </div>
-                  <button onClick={() => { generateSet(); setGen(p => ({ ...p, name: "New Set " + (sets.length + 1) })); }}
-                    style={{ ...B(T.silverBright), letterSpacing: 4, fontSize: 13, width: "100%", padding: "8px 16px", marginBottom: 8 }}>
-                    GENERATE {gen.total} CARDS → "{gen.name}"
-                  </button>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+                    <button onClick={() => { generateSet(); setGen(p => ({ ...p, name: "New Set " + (sets.length + 1) })); }}
+                      style={{ ...B(T.silverBright), letterSpacing: 4, fontSize: 13, flex: 1, padding: "8px 16px" }}>
+                      GENERATE {gen.total} → "{gen.name}"
+                    </button>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                      <span style={{ fontSize: 6, color: T.textDim, fontFamily: FONT_UI, letterSpacing: 1 }}>SEED</span>
+                      <input type="number" value={genSeed} onChange={e => setGenSeed(parseInt(e.target.value) || 1)}
+                        style={{ width: 52, background: "transparent", color: T.silverBright, fontFamily: FONT_UI, fontWeight: 900, fontSize: 11, border: `1px solid ${T.panelBorder}`, borderRadius: 2, padding: "4px 5px", outline: "none", textAlign: "center" }} />
+                    </div>
+                  </div>
                 </div>
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0, height: "100%" }}>
                   {/* Live preview table — updates as you drag sliders */}
@@ -2639,7 +2775,7 @@ export default function Trinity() {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : forgeMode === "campaign" ? (
               /* CAMPAIGN GENERATOR */
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {/* ── Controls strip (fixed-width columns, h-scroll if needed) ── */}
@@ -2676,6 +2812,11 @@ export default function Trinity() {
                       <button onClick={generateCampaign} style={{ ...B(T.legendary), letterSpacing: 2, fontSize: 10, padding: "7px 8px", marginTop: 4 }}>
                         ✦ GENERATE
                       </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                        <span style={{ fontSize: 6, color: T.textDim, fontFamily: FONT_UI, letterSpacing: 1 }}>SEED</span>
+                        <input type="number" value={camSeed} onChange={e => setCamSeed(parseInt(e.target.value) || 1)}
+                          style={{ width: 52, background: "transparent", color: T.silverBright, fontFamily: FONT_UI, fontWeight: 900, fontSize: 11, border: `1px solid ${T.panelBorder}`, borderRadius: 2, padding: "3px 5px", outline: "none", textAlign: "center" }} />
+                      </div>
                     </div>
 
                     <div style={{ width: 1, background: T.panelBorder, flexShrink: 0 }} />
@@ -2808,7 +2949,100 @@ export default function Trinity() {
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
+            {forgeMode === "decks" && (() => {
+              const { count, deckSize, factionMode } = autoGenCfg;
+              const ds = deckSize;
+              const STRATS = [
+                ["Balanced", 0.60, 0.20, 0.15, 0.35],
+                ["Aggro",    0.65, 0.14, 0.16, 0.20],
+                ["Control",  0.50, 0.30, 0.15, 0.50],
+                ["Tempo",    0.55, 0.20, 0.20, 0.25],
+              ];
+              const toRoman = n => { const v=[1000,900,500,400,100,90,50,40,10,9,5,4,1],s=["M","CM","D","CD","C","XC","L","XL","X","IX","V","IV","I"]; let r=""; v.forEach((val,i)=>{ while(n>=val){r+=s[i];n-=val;} }); return r; };
+              const lbl = { fontFamily: FONT_UI, fontSize: 9, fontWeight: 800, color: T.silver, letterSpacing: 2 };
+              const pill = (active, col) => ({
+                padding: "2px 7px", borderRadius: 2, cursor: "pointer", fontFamily: FONT_UI, fontSize: 10, fontWeight: 800,
+                border: `1px solid ${active ? (col || T.silverBright) : T.panelBorder}`,
+                background: active ? (col || T.silver) + "18" : "transparent",
+                color: active ? (col || T.silverBright) : T.textDim,
+              });
+              const previews = Array.from({ length: Math.min(count, 16) }, (_, i) => {
+                const [arch, entPct, bcPct, equPct, oneCR] = STRATS[i % STRATS.length];
+                const faction = count === 1 ? (factionMode === "curse" ? "curse" : factionMode === "rand" ? "random" : "blessing") : (i % 2 === 0 ? "blessing" : "curse");
+                const bcSlots = Math.max(5, Math.round(ds * bcPct));
+                const equSlots = Math.max(3, Math.round(ds * equPct));
+                const terrSlots = 2;
+                const entSlots = Math.max(4, ds - bcSlots - equSlots - terrSlots);
+                const oneCSlots = Math.round(bcSlots * oneCR);
+                return { name: toRoman(decks.length + i + 1), arch, faction, entSlots, bcSlots, oneCSlots, highCSlots: bcSlots - oneCSlots, equSlots, terrSlots, total: entSlots + bcSlots + equSlots + terrSlots };
+              });
+              const fCol = f => f === "blessing" ? T.bless : f === "curse" ? T.curse : T.silver;
+              const fSym = f => f === "blessing" ? "△" : f === "curse" ? "▽" : "✡";
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* Config row */}
+                  <div style={{ padding: "9px 12px", background: "#07070a", border: `1px solid ${T.silverDim}45`, borderRadius: 3, display: "flex", flexDirection: "column", gap: 7, width: "fit-content" }}>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                      <span style={lbl}>DECKS</span>
+                      {[1, 2, 4, 8, 16, 32, 64].map(n => (
+                        <button key={n} onClick={() => setAutoGenCfg(p => ({ ...p, count: n }))} style={pill(count === n)}>{n}</button>
+                      ))}
+                      <span style={{ ...lbl, marginLeft: 6 }}>SIZE</span>
+                      <input type="number" min={20} max={80} key={ds} defaultValue={ds}
+                        onBlur={e => setAutoGenCfg(p => ({ ...p, deckSize: Math.max(20, Math.min(80, parseInt(e.target.value) || 30)) }))}
+                        style={{ width: 42, background: "transparent", color: T.silverBright, fontFamily: FONT_UI, fontWeight: 900, fontSize: 11, border: `1px solid ${T.panelBorder}`, borderRadius: 2, padding: "2px 5px", outline: "none" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                      {count === 1 ? (
+                        [["bless", "△ Ascension", T.bless], ["curse", "▽ Corruption", T.curse], ["rand", "✡ Fated", T.silver]].map(([v, l, col]) => (
+                          <button key={v} onClick={() => setAutoGenCfg(p => ({ ...p, factionMode: v }))} style={{ ...pill(factionMode === v, col), boxShadow: factionMode === v ? `0 0 10px ${col}28` : "none" }}>{l}</button>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: 9, color: T.silver, fontFamily: FONT_UI }}>△ ×{count / 2} · ▽ ×{count / 2}</span>
+                      )}
+                      <button onClick={generateStructureDecks} style={{ ...pill(true), marginLeft: 8, padding: "3px 18px", letterSpacing: 3, fontSize: 11, color: T.silverBright, border: `1px solid ${T.silverDim}` }}>BUILD</button>
+                    </div>
+                  </div>
+                  {/* Preview grid — wraps to next line naturally */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {previews.map((p, i) => (
+                      <div key={i} style={{ width: 100, flexShrink: 0, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 3, overflow: "hidden" }}>
+                        {/* Header */}
+                        <div style={{ padding: "5px 8px", borderBottom: `1px solid ${T.panelBorder}`, background: fCol(p.faction) + "10" }}>
+                          <div style={{ fontFamily: FONT_UI, fontSize: 11, fontWeight: 900, color: fCol(p.faction), letterSpacing: 1 }}>{p.name} {fSym(p.faction)}</div>
+                          <div style={{ fontFamily: FONT_UI, fontSize: 7, color: T.textDim, marginTop: 1, letterSpacing: 1 }}>{p.arch.toUpperCase()}</div>
+                        </div>
+                        {/* Stats */}
+                        <div style={{ padding: "5px 8px", display: "flex", flexDirection: "column", gap: 2 }}>
+                          {[
+                            ["Total",   p.total,             T.silverBright, true],
+                            ["Entity",  `${p.entSlots} ±2`,  TC.entity,      false],
+                            ["Spell",   `${p.bcSlots} ±2`,   fCol(p.faction),false],
+                            [" 1C",     `~${p.oneCSlots}`,   T.textDim,      false],
+                            [" Hi-C",   `~${p.highCSlots}`,  T.textDim,      false],
+                            ["Equip",   `${p.equSlots} ±2`,  TC.equip,       false],
+                            ["Terrain", p.terrSlots,          TC.terrain,     false],
+                          ].map(([lbl, v, c, bold]) => (
+                            <div key={lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                              <span style={{ fontFamily: FONT_UI, fontSize: 7, color: T.textDim, fontWeight: 700 }}>{lbl}</span>
+                              <span style={{ fontFamily: FONT_UI, fontSize: bold ? 10 : 8, color: c, fontWeight: bold ? 900 : 500 }}>{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Ratio bar */}
+                        <div style={{ display: "flex", height: 5, margin: "0 8px 7px" }}>
+                          <div style={{ flex: p.entSlots, background: TC.entity, opacity: 0.85 }} />
+                          <div style={{ flex: p.bcSlots, background: fCol(p.faction), opacity: 0.85 }} />
+                          <div style={{ flex: p.equSlots, background: TC.equip, opacity: 0.85 }} />
+                          <div style={{ flex: p.terrSlots, background: TC.terrain, opacity: 0.85 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>)}
 
         {/* ═══ DECKS ═══ */}
@@ -2817,50 +3051,9 @@ export default function Trinity() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <h2 style={{ fontFamily: FONT_UI, fontSize: 14, color: T.silverBright, letterSpacing: 3, margin: 0, fontWeight: 900 }}>DECKS</h2>
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => setShowAutoGen(v => !v)} style={B(showAutoGen ? T.silverBright : T.textDim)}>~ Autogen</button>
                 <button onClick={() => { setDecks(p => [...p, { name: "New Deck", cards: [] }]); setEditDeck({ idx: decks.length }); }} style={B(T.silverBright)}>+ New</button>
               </div>
             </div>
-            {showAutoGen && (() => {
-              const ds = autoGenCfg.deckSize;
-              const entS = Math.round(ds * 0.60), bcS = Math.round(ds * 0.20), equS = Math.max(0, ds - entS - bcS - 2);
-              const lbl = { fontFamily: FONT_UI, fontSize: 9, fontWeight: 800, color: T.silver, letterSpacing: 2 };
-              const pill = (active, col) => ({
-                padding: "2px 7px", borderRadius: 2, cursor: "pointer", fontFamily: FONT_UI, fontSize: 10, fontWeight: 800,
-                border: `1px solid ${active ? (col || T.silverBright) : T.panelBorder}`,
-                background: active ? (col || T.silver) + "18" : "transparent",
-                color: active ? (col || T.silverBright) : T.textDim,
-              });
-              return (
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                  <div style={{ width: "fit-content", padding: "9px 12px", background: "#07070a", border: `1px solid ${T.silverDim}45`, borderRadius: 3, display: "flex", flexDirection: "column", gap: 7 }}>
-                    {/* Row 1 — count + size */}
-                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                      <span style={lbl}>DECKS</span>
-                      {[1, 2, 4, 8, 16, 32, 64].map(n => (
-                        <button key={n} onClick={() => setAutoGenCfg(p => ({ ...p, count: n }))} style={pill(autoGenCfg.count === n)}>{n}</button>
-                      ))}
-                      <span style={{ ...lbl, marginLeft: 6 }}>SIZE</span>
-                      <input type="number" min={20} max={80} key={ds} defaultValue={ds}
-                        onBlur={e => setAutoGenCfg(p => ({ ...p, deckSize: Math.max(20, Math.min(80, parseInt(e.target.value) || 30)) }))}
-                        style={{ width: 42, background: "transparent", color: T.silverBright, fontFamily: FONT_UI, fontWeight: 900, fontSize: 11, border: `1px solid ${T.panelBorder}`, borderRadius: 2, padding: "2px 5px", outline: "none" }} />
-                    </div>
-                    {/* Row 2 — allegiance (count=1) or bracket note, breakdown, forge */}
-                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                      {autoGenCfg.count === 1 ? (<>
-                        {[["bless", "△ Ascension", T.bless], ["curse", "▽ Corruption", T.curse], ["rand", "✡ Fated", T.silver]].map(([v, l, col]) => (
-                          <button key={v} onClick={() => setAutoGenCfg(p => ({ ...p, factionMode: v }))} style={{ ...pill(autoGenCfg.factionMode === v, col), boxShadow: autoGenCfg.factionMode === v ? `0 0 10px ${col}28` : "none" }}>{l}</button>
-                        ))}
-                      </>) : (
-                        <span style={{ fontSize: 9, color: T.silver, fontFamily: FONT_UI }}>△ ×{autoGenCfg.count / 2} · ▽ ×{autoGenCfg.count / 2}</span>
-                      )}
-                      <span style={{ fontSize: 9, color: T.textDim, fontFamily: FONT_UI, marginLeft: 4 }}>~{entS}e · ~{bcS}bc · ~{equS}eq · 2t</span>
-                      <button onClick={generateStructureDecks} style={{ ...pill(true), marginLeft: 8, padding: "3px 14px", letterSpacing: 3, color: T.silverBright, border: `1px solid ${T.silverDim}` }}>BUILD</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 8 }}>
               {decks.map((d, i) => (
                 <div key={i} style={{ position: "relative", padding: 10, background: T.panel, border: `1px solid ${T.panelBorder}`, borderRadius: 4, cursor: "pointer" }} onClick={() => setEditDeck({ idx: i })}>
