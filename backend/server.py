@@ -24,6 +24,7 @@ class GameManager:
         self.decks: Dict[str, dict] = {}  # role -> deck object
         self.game_state: Optional[dict] = None
         self.spectators: List[WebSocket] = []
+        self.aliases: Dict[str, str] = {}  # role -> emoji alias
 
     async def broadcast(self, data: dict):
         dead_roles = []
@@ -51,6 +52,7 @@ class GameManager:
             self.players = {}
         self.decks = {}
         self.game_state = None
+        self.aliases = {}
         # Keep spectators unless hard reset
         if hard:
             self.spectators = []
@@ -116,7 +118,34 @@ async def websocket_endpoint(websocket: WebSocket):
                 if "flash" in data: response["flash"] = data["flash"]
                 if "sound" in data: response["sound"] = data["sound"]
                 if "sender" in data: response["sender"] = data["sender"]
-                await gm.broadcast(response)
+                # Relay to others only — sender already applied state locally
+                for role, ws_conn in list(gm.players.items()):
+                    if ws_conn != websocket:
+                        try: await ws_conn.send_json(response)
+                        except: pass
+                for ws_conn in list(gm.spectators):
+                    try: await ws_conn.send_json(response)
+                    except: pass
+
+            elif msg_type == "set_alias":
+                role = data.get("role")
+                alias = data.get("alias", "")
+                if role in ("p1", "p2"):
+                    gm.aliases[role] = alias
+                    await gm.broadcast({"type": "alias_update", "role": role, "alias": alias})
+
+            elif msg_type == "game_action":
+                # Action-based sync: relay the action (+ pre-computed state) to the other player
+                if "state" in data:
+                    gm.game_state = data["state"]
+                relay = {"type": "game_action", "action": data.get("action"), "state": gm.game_state, "seq": data.get("seq")}
+                for role, ws_conn in list(gm.players.items()):
+                    if ws_conn != websocket:
+                        try: await ws_conn.send_json(relay)
+                        except: pass
+                for ws_conn in list(gm.spectators):
+                    try: await ws_conn.send_json(relay)
+                    except: pass
 
             elif msg_type in ["sync_anim", "sync_sfx"]:
                 await gm.broadcast(data)
@@ -217,12 +246,20 @@ def get_collection(): return read_json("collection", {})
 async def put_collection(request: Request):
     return write_json("collection", await request.json())
 
+@app.get("/api/images/exists")
+def image_exists(filename: str):
+    p = PUBLIC / "images" / filename
+    return {"exists": p.exists(), "path": f"/images/{filename}"}
+
 @app.post("/api/upload/image")
-async def upload_image(file: UploadFile = File(...), card_id: Optional[str] = Form(None)):
+async def upload_image(file: UploadFile = File(...), card_id: Optional[str] = Form(None), use_original_name: bool = Form(False)):
     img_dir = PUBLIC / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
-    ext = Path(file.filename).suffix or ".png"
-    name = f"{card_id or uuid.uuid4().hex[:8]}{ext}"
+    if use_original_name:
+        name = file.filename
+    else:
+        ext = Path(file.filename).suffix or ".png"
+        name = f"{card_id or uuid.uuid4().hex[:8]}{ext}"
     dest = img_dir / name
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
