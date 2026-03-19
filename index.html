@@ -4,7 +4,7 @@
 <head>
   <link rel="icon" href="/favicon.ico">
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Trinity</title>
   <style>
     * {
@@ -20,6 +20,14 @@
 
     body {
       zoom: 1.0
+    }
+
+    /* Mobile scaling — landscape is strongly recommended */
+    @media (max-width: 768px) and (orientation: landscape) {
+      body { zoom: 0.48; }
+    }
+    @media (max-width: 768px) and (orientation: portrait) {
+      body { zoom: 0.28; }
     }
   </style>
 </head>

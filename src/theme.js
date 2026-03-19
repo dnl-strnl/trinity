@@ -12,27 +12,27 @@ export const THEME = {
   panel: "#0a0a10", panelBorder: "#18181f",
   card: "#0c0c12", cardBorder: "#1e1e28",
   silver: "#a8a8b8", silverBright: "#d0d0dc", silverDim: "#555564", white: "#e4e4ec",
-  entity: "#607080", terrain: "#6a6050", equip: "#605868", bless: "#607888", curse: "#884455",
+  being: "#607080", field: "#6a6050", equip: "#605868", bless: "#607888", curse: "#884455",
   text: "#b8b8c8", textDim: "#505060", textBright: "#d8d8e4",
   light: "#c0c0d0", dark: "#6a4898", balanced: "#508080",
-  danger: "#993344", legendary: "#d8c8a0",
+  danger: "#993344", legendary: "#d8c8a0", black: "#000000",
   gridCell: "#06060a", gridCellHL: "#1a1a24",
   parchment: "#b8a888", wood2: "#3a2a1c",
 };
 
 export const TYPE_COLORS = {
-  entity: THEME.entity,
-  terrain: THEME.terrain,
+  being: THEME.being,
+  field: THEME.field,
   equip: THEME.equip,
-  blessing: THEME.bless,
+  bless: THEME.bless,
   curse: THEME.curse,
 };
 
 export const DEFAULT_GRADS = {
-  entity: ["#4a3c2c", "#2a1c10"],
-  terrain: ["#3a3828", "#1c1a10"],
+  being: ["#4a3c2c", "#2a1c10"],
+  field: ["#3a3828", "#1c1a10"],
   equip: ["#3c3430", "#1e1a18"],
-  blessing: ["#1972d7ff", "#1c2838"],
+  bless: ["#1972d7ff", "#1c2838"],
   curse: ["#4a2028", "#2a0c14"],
 };
 
@@ -50,12 +50,15 @@ export const RARITY_COLORS = {
   legendary: THEME.legendary,
 };
 
-// entity / terrain stats
+// being / field stats
 export const STAT_DEFS = [
   { key: "soul", label: "S", color: "#a88870" }, // soul
   { key: "mind", label: "M", color: "#7088a8" }, // mind
   { key: "will", label: "W", color: "#70a890" }, // will
 ];
+
+// feature flags
+export const TRIBUTE_SUMMON_ENABLED = false;
 
 // game config
 export const STAT_MIN = -4;

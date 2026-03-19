@@ -6,7 +6,7 @@ Data: ./data/*.json  (auto-created on first write)
 Docs: http://localhost:4000/docs
 """
 
-import json, os, shutil, uuid, logging
+import json, os, shutil, uuid, logging, random
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,6 +59,19 @@ class GameManager:
 
 gm = GameManager()
 
+DEFAULT_SETTINGS = {
+    "cMax": 10,
+    "handSize": 7,
+    "actionsPerTurn": 3,
+    "deckSize": 30,
+    "maxCopies": 3,
+    "tokensStart": 2,
+    "tokensPerWin": 1,
+    "packCost": 1,
+    "cardsPerPack": 4,
+    "tributeSummonEnabled": False,
+}
+
 @app.websocket("/game-ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -86,7 +99,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     "type": "welcome",
                     "role": role,
                     "state": gm.game_state,
-                    "taken": list(gm.players.keys())
+                    "taken": list(gm.players.keys()),
+                    "aliases": gm.aliases
                 })
                 await gm.broadcast({"type": "room_update", "taken": list(gm.players.keys())})
 
@@ -175,6 +189,8 @@ HERE = Path(__file__).parent  # resolve paths relative to this file
 DATA = HERE / "data"
 PUBLIC = HERE.parent / "public"  # public/ is sibling to backend/ - go up one level
 DATA.mkdir(exist_ok=True)
+GAMES = PUBLIC / "games"
+GAMES.mkdir(parents=True, exist_ok=True)
 
 def read_json(name, default=None):
     p = DATA / f"{name}.json"
@@ -192,6 +208,13 @@ def write_json(name, data):
     log.info(f"WRITE {name}.json → {size} entries ({p.stat().st_size} bytes)")
     return data
 
+@app.get("/api/settings")
+def get_settings(): return read_json("settings", DEFAULT_SETTINGS)
+
+@app.put("/api/settings")
+async def put_settings(request: Request):
+    return write_json("settings", await request.json())
+
 @app.get("/api/state")
 def get_state():
     log.info("GET /api/state")
@@ -203,6 +226,7 @@ def get_state():
         "collection": read_json("collection", {}),
         "tokens": read_json("tokens", 2),
         "audio_enabled": audio_env == "1",
+        "settings": read_json("settings", DEFAULT_SETTINGS),
     }
 
 @app.put("/api/state")
@@ -214,6 +238,7 @@ async def put_state(request: Request):
     if "sets" in body: write_json("sets", body["sets"])
     if "collection" in body: write_json("collection", body["collection"])
     if "tokens" in body: write_json("tokens", body["tokens"])
+    if "settings" in body: write_json("settings", body["settings"])
     return {"ok": True}
 
 
@@ -245,6 +270,43 @@ def get_collection(): return read_json("collection", {})
 @app.put("/api/collection")
 async def put_collection(request: Request):
     return write_json("collection", await request.json())
+
+@app.post("/api/game-log")
+async def save_game_log(request: Request):
+    body = await request.json()
+    ts = body.get("startedAt", "").replace(":", "-").replace(".", "-")[:19] or str(int(__import__("time").time()))
+    fname = f"game-{ts}.json"
+    p = GAMES / fname
+    p.write_text(json.dumps(body, indent=2))
+    log.info(f"GAME LOG saved → {fname} ({p.stat().st_size} bytes)")
+    return {"status": "ok", "file": fname}
+
+@app.get("/api/videos/resolve-batch")
+def resolve_videos_batch(stems: str = ""):
+    """Given comma-separated image stems, return a map of stem -> resolved video path (or null)."""
+    vid_dir = PUBLIC / "videos"
+    result = {}
+    for stem in (s.strip() for s in stems.split(",") if s.strip()):
+        simple = vid_dir / f"{stem}.mp4"
+        if simple.exists():
+            result[stem] = f"/videos/{stem}.mp4"
+            continue
+        dir_path = vid_dir / stem
+        if dir_path.is_dir():
+            vids = sorted(dir_path.glob("*.mp4"))
+            if vids:
+                result[stem] = f"/videos/{stem}/{random.choice(vids).name}"
+                continue
+        result[stem] = None
+    return result
+
+@app.get("/api/images/list")
+def list_images():
+    img_dir = PUBLIC / "images"
+    if not img_dir.exists():
+        return []
+    exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"}
+    return sorted(f"/images/{f.name}" for f in img_dir.iterdir() if f.is_file() and f.suffix.lower() in exts)
 
 @app.get("/api/images/exists")
 def image_exists(filename: str):
@@ -279,7 +341,7 @@ async def upload_video(file: UploadFile = File(...), card_id: Optional[str] = Fo
     return {"path": f"/videos/{name}", "card_id": card_id}
 
 @app.post("/api/upload/bulk")
-async def upload_bulk(files: list[UploadFile] = File(...), card_type: str = Form("entity")):
+async def upload_bulk(files: list[UploadFile] = File(...), card_type: str = Form("being")):
     img_dir = PUBLIC / "images"
     img_dir.mkdir(parents=True, exist_ok=True)
     results = []
