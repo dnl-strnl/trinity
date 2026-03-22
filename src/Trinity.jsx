@@ -67,6 +67,15 @@ function canReach(r, c, tr, tc, bd) {
 function hasAdjField(r, c, bd) {
   return adj(r, c).some(([ar, ac]) => bd[ar]?.[ac]?.cd.type === "field");
 }
+function hasAdjOccupied(r, c, bd) {
+  return adj(r, c).some(([ar, ac]) => bd[ar]?.[ac] != null);
+}
+function hasAdjSetOrField(r, c, bd) {
+  return adjFull(r, c).some(([ar, ac]) => {
+    const cl = bd[ar]?.[ac]; if (!cl) return false;
+    return cl.fd || cl.cd?.type === "field";
+  });
+}
 function renderStatFilter(statF, setStatF, vertical = false) {
   const vals = [null, -4, -3, -2, -1, 0, 1, 2, 3, 4];
   const anyActive = STAT_DEFS.some(s => statF[s.key] !== null);
@@ -773,6 +782,7 @@ export default function Trinity() {
   const [log, setLog] = useState([]); const logRef = useRef(null); const [aiR, setAiR] = useState(false); const forfeitRef = useRef(false);
   const [pit, setPit] = useState({ player: [], ai: [] }); const [showPit, setShowPit] = useState(false);
   const [recentPit, setRecentPit] = useState([]);
+  const [eqFlash, setEqFlash] = useState(null); // { r, c, aura } — one-shot equip flash
   const [inspCell, setInspCell] = useState(null);
 
   const [nc, setNc] = useState({
@@ -1277,6 +1287,9 @@ export default function Trinity() {
     @keyframes shimmerRare{0%{box-shadow:0 0 8px #d0d0dc33;transform:scale(1)}50%{box-shadow:0 0 22px #d0d0dc66;transform:scale(1.02)}100%{box-shadow:0 0 8px #d0d0dc33;transform:scale(1)}}
     @keyframes shimmerLegendary{0%{box-shadow:0 0 10px #d8c8a044,0 0 30px #d8c8a022;transform:scale(1);filter:brightness(1)}25%{box-shadow:0 0 20px #d8c8a088,0 0 50px #d8c8a044;transform:scale(1.03);filter:brightness(1.1)}50%{box-shadow:0 0 30px #d8c8a0aa,0 0 60px #d8c8a066;transform:scale(1.01);filter:brightness(1.2)}75%{box-shadow:0 0 20px #d8c8a088,0 0 50px #d8c8a044;transform:scale(1.03);filter:brightness(1.1)}100%{box-shadow:0 0 10px #d8c8a044,0 0 30px #d8c8a022;transform:scale(1);filter:brightness(1)}}
     @keyframes trapGlow{0%,100%{box-shadow:0 0 3px #88445522}50%{box-shadow:0 0 8px #88445544}}
+    @keyframes eqFlashGold{0%{filter:brightness(1);outline:2px solid transparent}12%{filter:brightness(1.8);outline:2px solid #c9a84ccc}35%{filter:brightness(1.3);outline:2px solid #c9a84c66}100%{filter:brightness(1);outline:2px solid transparent}}
+    @keyframes eqFlashRed{0%{filter:brightness(1);outline:2px solid transparent}12%{filter:brightness(1.8);outline:2px solid #cc4444cc}35%{filter:brightness(1.3);outline:2px solid #cc444466}100%{filter:brightness(1);outline:2px solid transparent}}
+    @keyframes eqFlashWhite{0%{filter:brightness(1);outline:2px solid transparent}12%{filter:brightness(1.8);outline:2px solid #a8a8b8cc}35%{filter:brightness(1.3);outline:2px solid #a8a8b866}100%{filter:brightness(1);outline:2px solid transparent}}
     *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#18181f #04040a}
     ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#04040a}::-webkit-scrollbar-thumb{background:#18181f;border-radius:2px}
     input[type=range]{height:3px}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:#a8a8b8;cursor:pointer}
@@ -1452,6 +1465,7 @@ export default function Trinity() {
         STAT_DEFS.forEach(s => { movingCell.ib[s.key] = (movingCell.ib[s.key] || 0) + (landCell.cd[s.key] || 0); });
       }
       playSfx("action");
+      const eqA = aura(landCell.cd); setEqFlash({ r, c, aura: eqA }); setTimeout(() => setEqFlash(null), 900);
       enqF("EQUIP ACTIVATED", { color: TC.equip, border: TC.equip, icon: "E", image: landCell.cd.image });
       addLog(`⊕ Equip Activated: ${landCell.cd.name || "Equip"}`);
       toPit(landCell.cd, mover);
@@ -1475,6 +1489,14 @@ export default function Trinity() {
       enqF("FIELD DIFFUSED", { color: TC.field, border: TC.field, icon: "F" });
       addLog(`✡ Field Diffused`);
       toPit(landCell.cd, landCell.ow);
+      g.bd[r][c] = null;
+    }
+    // Own face-up field — remove it to open a corridor
+    else if (!landCell.fd && landCell.cd?.type === "field" && landCell.ow === mover) {
+      playSfx("diffuse");
+      enqF("FIELD CLEARED", { color: TC.field, border: TC.field, icon: "✕" });
+      addLog(`✕ Field Cleared: ${landCell.cd.name || "Field"}`);
+      toPit(landCell.cd, mover);
       g.bd[r][c] = null;
     }
     return false;
@@ -1518,7 +1540,9 @@ export default function Trinity() {
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
       const cl = g.bd[r][c];
       if (cl?.cd.type === "being" && !cl.fd) {
-        if (cl.ow === "player") pCount++; else aCount++;
+        // Center 3x3 (rows 1-3, cols 1-3) beings count double for presence
+        const centerBonus = (r >= 1 && r <= 3 && c >= 1 && c <= 3) ? 2 : 1;
+        if (cl.ow === "player") pCount += centerBonus; else aCount += centerBonus;
       }
     }
     const diff = pCount - aCount;
@@ -1663,7 +1687,7 @@ export default function Trinity() {
       if (game.act < 1) { setHl([]); setMode("playField"); return; } // no actions — can only set (free)
       const cells = [];
       for (let r = 0; r < 5; r++) for (let col = 0; col < 5; col++) {
-        if (!game.bd[r][col] && !hasAdjField(r, col, game.bd)) cells.push([r, col]);
+        if (!game.bd[r][col] && !hasAdjSetOrField(r, col, game.bd)) cells.push([r, col]);
       }
       setHl(cells); setMode("playField");
     }
@@ -1704,7 +1728,7 @@ export default function Trinity() {
   function doSetTrap() {
     if (!game || selH === null) return;
     const cells = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      if (!game.bd[r][c]) cells.push([r, c]);
+      if (!game.bd[r][c] && !hasAdjOccupied(r, c, game.bd)) cells.push([r, c]);
     }
     setHl(cells); setMode("setTrap");
   }
@@ -1713,14 +1737,14 @@ export default function Trinity() {
     const mr = curR; const mhk = mr === "player" ? "pH" : "aH";
     if (game[mhk][selH]?.type !== "equip") return;
     if (game.act !== 1) { addLog("Can only set equip as your last action."); return; }
-    const cells = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!game.bd[r][c]) cells.push([r, c]);
+    const cells = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!game.bd[r][c] && !hasAdjOccupied(r, c, game.bd)) cells.push([r, c]);
     setHl(cells); setMode("setEquip");
   }
   function doSetField() {
     if (!game || selH === null) return;
     const cells = [];
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      if (!game.bd[r][c] && !hasAdjField(r, c, game.bd)) cells.push([r, c]);
+      if (!game.bd[r][c] && !hasAdjOccupied(r, c, game.bd)) cells.push([r, c]);
     }
     setHl(cells); setMode("setField");
   }
@@ -1752,13 +1776,13 @@ export default function Trinity() {
           if (!game.bd[ar][ac] && !cells.some(([cr, cc]) => cr === ar && cc === ac)) cells.push([ar, ac]);
       }
     }
-    setHl(cells); setMode("setBeing");
+    setHl(cells.filter(([cr, cc]) => !hasAdjOccupied(cr, cc, game.bd))); setMode("setBeing");
   }
   function doPlayField() {
     if (!game || selH === null || game.act < 1) return;
     const cells = [];
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
-      if (!game.bd[r][c] && !hasAdjField(r, c, game.bd)) cells.push([r, c]);
+      if (!game.bd[r][c] && !hasAdjSetOrField(r, c, game.bd)) cells.push([r, c]);
     }
     setHl(cells); setMode("playField");
   }
@@ -1882,6 +1906,7 @@ export default function Trinity() {
       enqF("EQUIP", { color: T.item, border: T.item, icon: "⊕", image: item.image });
       addLog(`Equip: ${item.name || item.type}`);
       toPit(item, mr);
+      const itemAura = aura(item); setEqFlash({ r, c, aura: itemAura }); setTimeout(() => setEqFlash(null), 900);
       updateGame(g, { type: ACTION_TYPES.EQUIP, row: r, col: c, handIdx: selH }); clr(); return;
     }
     if (cell?.ow === mr && cell.fd && cell.cd?.type !== "equip" && !mode) {
@@ -1919,7 +1944,7 @@ export default function Trinity() {
       const moveA = adj(r, c, isT ? 2 : 1).filter(([tr, tc]) => canReach(r, c, tr, tc, game.bd));
       const atkA = isT ? adjFull(r, c) : adj(r, c, 1);
       setHl([
-        ...moveA.filter(([ar, ac]) => { const d = game.bd[ar][ac]; if (!d) return true; if (d.fd && d.ow === mr && d.cd?.type === "equip" && (d.prm || 0) > 0) return false; if (d.fd && d.ow === mr && d.cd?.type === "being") return false; if (d.fd) return true; return isFieldTrans && d.cd?.type === "field"; }),
+        ...moveA.filter(([ar, ac]) => { const d = game.bd[ar][ac]; if (!d) return true; if (d.fd && d.ow === mr && d.cd?.type === "equip" && (d.prm || 0) > 0) return false; if (d.fd && d.ow === mr && d.cd?.type === "being") return false; if (d.fd) return true; if (!d.fd && d.cd?.type === "field" && d.ow === mr) return true; return isFieldTrans && d.cd?.type === "field"; }),
         ...atkA.filter(([ar, ac]) => { const t = game.bd[ar]?.[ac]; return t && t.ow === or && t.cd.type === "being" && !t.fd; })
       ]);
       setMode("moveOrTap"); return;
@@ -1938,7 +1963,7 @@ export default function Trinity() {
         setPendingSetBattle({ sr, sc, r, c, isMovingFieldTrans });
         setTapTgt([r, c]); setMode("chooseStat"); setHl([]);
       }
-      else if (!dest || dest.fd || (isMovingFieldTrans && isTerrainTarget)) {
+      else if (!dest || dest.fd || (isMovingFieldTrans && isTerrainTarget) || (isTerrainTarget && dest.ow === mr)) {
         if (game.act <= 0) return;
         const g = { ...game, bd: game.bd.map(row => [...row]) };
         const movingEnt = g.bd[sr][sc];
@@ -2101,10 +2126,11 @@ export default function Trinity() {
     const aiPos = s.pRole === "dark", acts = [];
     for (let i = 0; i < s.aH.length; i++) {
       const c = s.aH[i]; if (c.type !== "bless" && c.type !== "curse") continue;
-      if (s.act < 1) continue;
+      const spellCost = (s.c === 0 && s.cMoved) ? 0 : 1;
+      if (s.act < spellCost) continue;
       const v = c.type === "bless" ? cPwr(c) : -cPwr(c);
       const nC = Math.max(-C_MAX, Math.min(C_MAX, s.c + v));
-      acts.push({ type: "PLAY_SPELL", handIdx: i, card: c, isLethal: (aiPos && nC >= C_MAX) || (!aiPos && nC <= -C_MAX), cVal: v });
+      acts.push({ type: "PLAY_SPELL", handIdx: i, card: c, isLethal: (aiPos && nC >= C_MAX) || (!aiPos && nC <= -C_MAX), cVal: v, cost: spellCost });
     }
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
       const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "being" || cl.fd) continue;
@@ -2123,7 +2149,7 @@ export default function Trinity() {
       const clIsZero = aura(getEff(cl.cd, s.bd, r, c, cl.ib)) === 0;
       for (const [nr, nc] of (clIsZero ? adjFull(r, c) : adj(r, c, 1))) {
         const tgt = s.bd[nr]?.[nc];
-        if (tgt && tgt.ow === "ai") continue;
+        if (tgt && tgt.ow === "ai" && !(tgt.cd?.type === "field" && !tgt.fd)) continue;
         // Set being battle: AI moves onto player's face-down being
         if (BEING_SET_ENABLED && tgt?.fd && tgt.cd?.type === "being" && tgt.ow === "player") {
           const aS = getEff(cl.cd, s.bd, r, c, cl.ib);
@@ -2133,7 +2159,7 @@ export default function Trinity() {
           if (bStat) acts.push({ type: "SET_BATTLE", fromRow: r, fromCol: c, toRow: nr, toCol: nc, ...bStat, cl });
           continue;
         }
-        if (tgt && !tgt.fd && !(clIsZero && tgt.cd?.type === "field")) continue;
+        if (tgt && !tgt.fd && !(clIsZero && tgt.cd?.type === "field") && !(tgt.cd?.type === "field" && tgt.ow === "ai")) continue;
         if (cl.summonedThisTurn && nr <= r) continue;
         acts.push({ type: "MOVE", fromRow: r, fromCol: c, toRow: nr, toCol: nc, cl, isDiffuseTerrain: clIsZero && !!tgt && !tgt.fd && tgt.cd?.type === "field" });
       }
@@ -2148,7 +2174,7 @@ export default function Trinity() {
               if (!s.bd[r][c] || (r === tr && c === tc)) acts.push({ type: "TRIBUTE_SUMMON", handIdx: hi, card, row: r, col: c, tribRow: tr, tribCol: tc });
           }
         } else {
-          for (let r = 0; r <= 1; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c });
+          for (let r = 0; r <= 1; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c, placeFit: (4 - (Math.abs(r - 2) + Math.abs(c - 2))) * 2 });
           // Field overlap: any unoccupied cell adjacent to 2+ face-up fields (outside normal summon zone)
           for (let r = 2; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c] && countAdjFaceUpFields(r, c, s.bd) >= 2) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c });
           if (isTranscendent(card)) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { const cl = s.bd[r][c]; if (cl && (cl.cd?.type === "field" || (cl.fd && cl.cd?.type !== "equip"))) acts.push({ type: "SUMMON", handIdx: hi, card, row: r, col: c, isPurge: true }); } }
@@ -2158,25 +2184,71 @@ export default function Trinity() {
           for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { const cl = s.bd[r][c]; if (cl?.ow === "ai" && cl.cd.type === "being" && !cl.fd && isVoid(cl.cd)) { for (const [ar, ac] of adjFull(r, c)) if (!s.bd[ar][ac]) acts.push({ type: "SUMMON", handIdx: hi, card, row: ar, col: ac }); } }
           // Being set: set face-down (~30% chance to consider)
           if (BEING_SET_ENABLED && Math.random() < 0.3) {
-            for (let r = 0; r <= 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SET_BEING", handIdx: hi, card, row: r, col: c });
+            for (let r = 0; r <= 2; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c] && !hasAdjOccupied(r, c, s.bd)) acts.push({ type: "SET_BEING", handIdx: hi, card, row: r, col: c });
           }
         }
       }
-      else if (card.type === "field") { for (let r = 3; r <= 4; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c] && !hasAdjField(r, c, s.bd)) acts.push({ type: "TERRAIN", handIdx: hi, card, row: r, col: c }); }
-      else if (card.type === "equip") {
-        for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { const cl = s.bd[r][c]; if (cl && cl.ow === "ai" && cl.cd.type === "being" && !cl.fd) acts.push({ type: "EQUIP", handIdx: hi, item: card, row: r, col: c }); }
-        if (s.act === 1 && Math.random() < 0.35) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SET_EQUIP", handIdx: hi, card, row: r, col: c, bluff: true }); }
+      else if (card.type === "field") {
+        // TERRAIN (face-down): rows 0-4, tag with intent
+        for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+          if (s.bd[r][c] || hasAdjSetOrField(r, c, s.bd)) continue;
+          const intent = r <= 2 ? "buff" : "trap";
+          acts.push({ type: "TERRAIN", handIdx: hi, card, row: r, col: c, intent });
+        }
+        // PLAY_FIELD (face-up): empty cells near AI beings for immediate buff
+        if (s.act >= 1) {
+          for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+            if (s.bd[r][c] || hasAdjSetOrField(r, c, s.bd)) continue;
+            let nearAiBeing = false;
+            for (const [ar, ac] of adjFull(r, c)) { const nb = s.bd[ar]?.[ac]; if (nb?.ow === "ai" && nb.cd.type === "being" && !nb.fd) { nearAiBeing = true; break; } }
+            if (nearAiBeing) acts.push({ type: "PLAY_FIELD", handIdx: hi, card, row: r, col: c });
+          }
+        }
       }
-      else if ((card.type === "bless" || card.type === "curse")) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c]) acts.push({ type: "SET_TRAP", handIdx: hi, card, row: r, col: c, bluff: Math.random() < 0.3 }); }
+      else if (card.type === "equip") {
+        for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+          const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || cl.cd.type !== "being" || cl.fd) continue;
+          let eqFit = 0;
+          const eff = getEff(cl.cd, s.bd, r, c, cl.ib);
+          // Covers a zero-stat vulnerability
+          for (const st of STAT_DEFS) if (eff[st.key] === 0 && (card[st.key] || 0) !== 0) eqFit += 25;
+          // Being is adjacent to enemies
+          for (const [ar, ac] of adj(r, c, 1)) { const nb = s.bd[ar]?.[ac]; if (nb?.ow === "player" && nb.cd.type === "being" && !nb.fd) { eqFit += 20; break; } }
+          // Would create transcendence
+          const postEff = {}; STAT_DEFS.forEach(st => { postEff[st.key] = eff[st.key] + (card[st.key] || 0); });
+          if (aura(postEff) === 0 && aura(eff) !== 0) eqFit += 15;
+          acts.push({ type: "EQUIP", handIdx: hi, item: card, row: r, col: c, eqFit });
+        }
+        if (s.act === 1 && Math.random() < 0.35) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c] && !hasAdjOccupied(r, c, s.bd)) acts.push({ type: "SET_EQUIP", handIdx: hi, card, row: r, col: c, bluff: true }); }
+      }
+      else if ((card.type === "bless" || card.type === "curse")) { for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (!s.bd[r][c] && !hasAdjOccupied(r, c, s.bd)) acts.push({ type: "SET_TRAP", handIdx: hi, card, row: r, col: c, bluff: Math.random() < 0.3 }); }
+    }
+    // FLIP actions — AI can flip its own primed set cards (max 2/turn, free)
+    if ((s.flips || 0) < 2) {
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+        const cl = s.bd[r][c]; if (!cl || cl.ow !== "ai" || !cl.fd || (cl.prm || 0) > 0) continue;
+        if (cl.cd.type === "field") {
+          let buffCount = 0;
+          for (const [ar, ac] of adjFull(r, c)) { const nb = s.bd[ar]?.[ac]; if (nb?.ow === "ai" && nb.cd.type === "being" && !nb.fd) buffCount++; }
+          acts.push({ type: "FLIP_FIELD", row: r, col: c, buffCount, cost: 0 });
+        } else if (cl.cd.type === "bless" || cl.cd.type === "curse") {
+          const pwr = cPwr(cl.cd); const v = cl.cd.type === "bless" ? pwr : -pwr;
+          const nC = Math.max(-C_MAX, Math.min(C_MAX, s.c + v));
+          const lethal = (aiPos && nC >= C_MAX) || (!aiPos && nC <= -C_MAX);
+          acts.push({ type: "FLIP_TRAP", row: r, col: c, cVal: v, isLethal: lethal, cost: 0 });
+        } else if (cl.cd.type === "being") {
+          acts.push({ type: "FLIP_BEING", row: r, col: c, cost: 0 });
+        }
+      }
     }
     if (s.aD.length) acts.push({ type: "DRAW" });
     return acts;
   }
   function aiApply(s, a) {
     const pd = s.pRole === "light" ? 1 : -1;
-    if (a.type === "PLAY_SPELL") { s.aH.splice(a.handIdx, 1); const v = a.card.type === "bless" ? cPwr(a.card) : -cPwr(a.card); aiApplyC(s, v); s.act -= 1; if (cPwr(a.card) === 1 && s.aD.length) s.aH.push(s.aD.shift()); }
+    if (a.type === "PLAY_SPELL") { s.aH.splice(a.handIdx, 1); const v = a.card.type === "bless" ? cPwr(a.card) : -cPwr(a.card); aiApplyC(s, v); s.act -= (a.cost ?? 1); if (cPwr(a.card) === 1 && s.aD.length) s.aH.push(s.aD.shift()); }
     else if (a.type === "ATTACK") { const { fromRow: fr, fromCol: fc, toRow: tr, toCol: tc, res } = a; if (res.winner === "attacker") { s.bd[tr][tc] = null; aiApplyC(s, res.dmg * (-pd)); } else if (res.winner === "defender") { s.bd[fr][fc] = null; aiApplyC(s, res.dmg * pd); } s.act--; }
-    else if (a.type === "MOVE") { const t = s.bd[a.toRow][a.toCol]; const mover = s.bd[a.fromRow][a.fromCol]; s.bd[a.fromRow][a.fromCol] = null; if (t?.fd && t.ow === "player" && t.cd?.type === "field") { s.bd[a.toRow][a.toCol] = { ...t, fd: false }; /* being consumed by field */ } else { if (t?.ow === "player") s.bd[a.toRow][a.toCol] = null; s.bd[a.toRow][a.toCol] = mover; } s.act--; }
+    else if (a.type === "MOVE") { const t = s.bd[a.toRow][a.toCol]; const mover = s.bd[a.fromRow][a.fromCol]; s.bd[a.fromRow][a.fromCol] = null; if (t?.fd && t.ow === "player" && t.cd?.type === "field") { s.bd[a.toRow][a.toCol] = { ...t, fd: false }; /* being consumed by field */ } else if (t?.cd?.type === "field" && !t.fd && t.ow === "ai") { s.bd[a.toRow][a.toCol] = mover; /* own field cleared */ } else { if (t?.ow === "player") s.bd[a.toRow][a.toCol] = null; s.bd[a.toRow][a.toCol] = mover; } s.act--; }
     else if (a.type === "SUMMON") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true }; s.act--; }
     else if (a.type === "TRIBUTE_SUMMON") { s.aH.splice(a.handIdx, 1); s.bd[a.tribRow][a.tribCol] = null; s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 }, summonedThisTurn: true }; s.act--; }
     else if (a.type === "TERRAIN") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: true, prm: 1, ib: { soul: 0, mind: 0, will: 0 } }; } // free action
@@ -2184,39 +2256,80 @@ export default function Trinity() {
     else if (a.type === "SET_TRAP") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: true, prm: 1 }; s.act--; }
     else if (a.type === "SET_EQUIP") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: true, prm: 1 }; s.act = 0; }
     else if (a.type === "SET_BEING") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: true, prm: 0, ib: { soul: 0, mind: 0, will: 0 } }; } // free action
+    else if (a.type === "FLIP_FIELD") { s.bd[a.row][a.col] = { ...s.bd[a.row][a.col], fd: false }; s.flips = (s.flips || 0) + 1; } // free
+    else if (a.type === "FLIP_TRAP") { const cl = s.bd[a.row][a.col]; const pwr = cPwr(cl.cd); const v = cl.cd.type === "bless" ? pwr : -pwr; aiApplyC(s, v); s.bd[a.row][a.col] = null; s.flips = (s.flips || 0) + 1; } // free
+    else if (a.type === "FLIP_BEING") { s.bd[a.row][a.col] = { ...s.bd[a.row][a.col], fd: false }; s.flips = (s.flips || 0) + 1; } // free
+    else if (a.type === "PLAY_FIELD") { s.aH.splice(a.handIdx, 1); s.bd[a.row][a.col] = { cd: a.card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } }; s.act--; }
     else if (a.type === "SET_BATTLE") { const { fromRow: fr, fromCol: fc, toRow: tr, toCol: tc, res } = a; const mover = s.bd[fr][fc]; s.bd[fr][fc] = null; if (res.winner === "attacker") { s.bd[tr][tc] = mover; aiApplyC(s, res.dmg * (-pd)); } else if (res.winner === "defender") { s.bd[tr][tc] = { ...s.bd[tr][tc], fd: false }; aiApplyC(s, res.dmg * pd); } else { s.bd[tr][tc] = null; } s.act--; }
     else if (a.type === "DRAW") { if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; } }
   }
+  function aiPhase(s) { return s.tn <= 4 ? "early" : s.tn <= 10 ? "mid" : "late"; }
   function aiScore(s) {
     if (s.ph === "over") return s.win === "ai" ? 1e6 : -1e6;
     const aiPos = s.pRole === "dark";
-    let sc = (aiPos ? s.c : -s.c) * 40;
+    const phase = aiPhase(s);
+    const cWeight = phase === "late" ? 55 : phase === "mid" ? 40 : 30;
+    let sc = (aiPos ? s.c : -s.c) * cWeight;
+
+    // Collect board census (center-weighted for presence)
+    let aiB = 0, pB = 0, aiBW = 0, pBW = 0;
+    const aiBeings = [], pBeings = [];
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const cl = s.bd[r][c]; if (!cl) continue;
+      if (cl.cd.type === "being" && !cl.fd) {
+        const cw = (r >= 1 && r <= 3 && c >= 1 && c <= 3) ? 2 : 1;
+        if (cl.ow === "ai") { aiB++; aiBW += cw; aiBeings.push({ r, c, cl }); }
+        else { pB++; pBW += cw; pBeings.push({ r, c, cl }); }
+      }
+    }
+
+    // Threat map: how many AI beings threaten each player being
+    const pThreatCount = new Map(); // "r,c" -> count of AI beings that can kill it
+    for (const pb of pBeings) pThreatCount.set(`${pb.r},${pb.c}`, 0);
+
     for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
       const cl = s.bd[r][c]; if (!cl) continue;
       if (cl.ow === "ai") {
         if (cl.cd.type === "being" && !cl.fd) {
           sc += 55 + (4 - (Math.abs(r - 2) + Math.abs(c - 2))) * 7 + r * 5;
           sc += STAT_DEFS.reduce((sum, st) => sum + Math.abs(cl.ib?.[st.key] || 0), 0) * 4;
+          // Spread bonus
           let minD = 99;
-          for (let r2 = 0; r2 < 5; r2++) for (let c2 = 0; c2 < 5; c2++) { const nb = s.bd[r2][c2]; if (nb && nb.ow === "ai" && nb.cd.type === "being" && !nb.fd && (r2 !== r || c2 !== c)) { const d = Math.abs(r - r2) + Math.abs(c - c2); if (d < minD) minD = d; } }
+          for (const ob of aiBeings) { if (ob.r === r && ob.c === c) continue; const d = Math.abs(r - ob.r) + Math.abs(c - ob.c); if (d < minD) minD = d; }
           if (minD === 1) sc -= 10; else if (minD === 2) sc += 4;
+
           const aS = getEff(cl.cd, s.bd, r, c, cl.ib);
-          const clIsZeroScore = aura(aS) === 0;
-          for (const [tr, tc] of (clIsZeroScore ? adjFull(r, c) : adj(r, c, 1))) {
+          const clIsZero = aura(aS) === 0;
+
+          // Per-being stat vulnerability penalty
+          for (const st of STAT_DEFS) if (aS[st.key] === 0) sc -= 8;
+
+          // Adjacent combat analysis
+          let threats = 0, kills = 0, noWinAdj = 0;
+          for (const [tr, tc] of (clIsZero ? adjFull(r, c) : adj(r, c, 1))) {
             const tg = s.bd[tr]?.[tc]; if (!tg || tg.ow !== "player" || tg.cd.type !== "being" || tg.fd) continue;
             const dS = getEff(tg.cd, s.bd, tr, tc, tg.ib);
             const canWin = STAT_DEFS.some(st => resolveCombat(aS, dS, st.key).winner === "attacker");
+            const canLose = STAT_DEFS.some(st => resolveCombat(aS, dS, st.key).winner === "defender");
+            if (canWin) { kills++; const key = `${tr},${tc}`; if (pThreatCount.has(key)) pThreatCount.set(key, pThreatCount.get(key) + 1); }
+            if (canLose) threats++;
+            if (!canWin && canLose) noWinAdj++;
             sc += canWin ? 18 : -10;
           }
-          // Zero-aura entities: strongly reward proximity to opponent terrain (diffuse target)
-          if (clIsZeroScore) {
+          // Retreat need: adjacent to enemies with no winning matchup
+          if (noWinAdj > 0) sc -= noWinAdj * 12;
+          // Edge/corner safety for threatened beings
+          if (threats > 0 && (r === 0 || r === 4 || c === 0 || c === 4)) sc += 5;
+
+          // Zero-aura: proximity to opponent terrain
+          if (clIsZero) {
             for (let r2 = 0; r2 < 5; r2++) for (let c2 = 0; c2 < 5; c2++) {
               const t2 = s.bd[r2][c2]; if (!t2 || t2.ow !== "player" || t2.cd?.type !== "field") continue;
               const dist = Math.abs(r - r2) + Math.abs(c - c2);
               sc += dist === 0 ? 60 : dist === 1 ? 35 : dist === 2 ? 15 : 0;
             }
           }
-          // c=0 vulnerability: opponent gets free spells — heavy penalty for being adjacent to a stronger foe
+          // c=0 vulnerability
           if (s.c === 0) {
             for (const [nr, nc] of adj(r, c, 1)) {
               const opp = s.bd[nr]?.[nc]; if (!opp || opp.ow !== "player" || opp.cd.type !== "being" || opp.fd) continue;
@@ -2225,34 +2338,76 @@ export default function Trinity() {
             }
           }
         }
+        // Face-down card value
         if (cl.fd) sc += r >= 2 ? 12 : 5;
-        if (cl.cd.type === "field") sc += r >= 3 ? 16 : 7;
+        // Face-up field terrain-being synergy
+        if (cl.cd.type === "field" && !cl.fd) {
+          let aiBuffed = 0, pBuffed = 0;
+          for (const [ar, ac] of adjFull(r, c)) {
+            const nb = s.bd[ar]?.[ac]; if (!nb || nb.cd.type !== "being" || nb.fd) continue;
+            if (nb.ow === "ai") aiBuffed++; else pBuffed++;
+          }
+          sc += aiBuffed * 12 - pBuffed * 8;
+        } else if (cl.cd.type === "field" && cl.fd) {
+          sc += r >= 3 ? 16 : 7;
+        }
       } else {
         if (cl.cd.type === "being" && !cl.fd) {
           sc -= 28;
-          const dS = getEff(cl.cd, s.bd, r, c, cl.ib);
-          for (const [tr, tc] of (aura(getEff(cl.cd, s.bd, r, c, cl.ib)) === 0 ? adjFull(r, c) : adj(r, c, 1))) { const al = s.bd[tr]?.[tc]; if (al && al.ow === "ai" && al.cd.type === "being" && !al.fd) sc -= 10; }
+          for (const [tr, tc] of (aura(getEff(cl.cd, s.bd, r, c, cl.ib)) === 0 ? adjFull(r, c) : adj(r, c, 1))) {
+            const al = s.bd[tr]?.[tc]; if (al && al.ow === "ai" && al.cd.type === "being" && !al.fd) sc -= 10;
+          }
         }
       }
     }
+
+    // Pincer bonus: 2+ AI beings threatening the same player being
+    for (const [, cnt] of pThreatCount) if (cnt >= 2) sc += cnt * 8;
+
+    // Conviction strategy: spell-lethal detection
+    const aiSpells = s.aH.filter(c => aiPos ? c.type === "curse" : c.type === "bless");
+    const cToWinAI = aiPos ? s.c + C_MAX : C_MAX - s.c;
+    if (aiSpells.length > 0) {
+      const spellPwr = aiSpells.map(c => cPwr(c)).sort((a, b) => b - a);
+      let acc = 0;
+      for (let i = 0; i < Math.min(spellPwr.length, 3); i++) acc += spellPwr[i];
+      if (acc >= cToWinAI && cToWinAI > 0) sc += 120; // spell-lethal available
+      // Nexus proximity bonus: free casts when c=0
+      if (s.c === 0 && s.cMoved && aiSpells.length > 0) sc += 30;
+    }
+
+    // Opponent spell-lethal threat
+    const pIsLight = s.pRole === "light";
+    const cToWinP = pIsLight ? C_MAX - s.c : s.c + C_MAX;
+    const pSpells = s.pH.filter(c => pIsLight ? c.type === "bless" : c.type === "curse").map(c => cPwr(c)).sort((a, b) => b - a).slice(0, 3);
+    if (cToWinP > 0 && pSpells.reduce((a, b) => a + b, 0) >= cToWinP) sc -= 100;
+
     sc += (s.aH.length - s.pH.length) * 2 + s.aD.length * 0.5;
-    // Penalty for beings stuck in hand — encourages deploying them
+
+    // Penalty for beings in hand — phase-aware
     const handBeings = s.aH.filter(c => c.type === "being").length;
-    if (handBeings > 0) sc -= handBeings * 12;
-    // Presence bonus: reward board majority (mirrors chkPresence mechanic)
+    sc -= handBeings * (phase === "early" ? 18 : 12);
+
+    // Late game: boost spell play priority (reflected via hand spell value)
+    if (phase === "late") sc += aiSpells.length * 8;
+
+    // Presence bonus (center-weighted to match chkPresence)
     if (PRESENCE_ENABLED && s.tn > 3) {
-      let aiB = 0, pB = 0;
-      for (let r2 = 0; r2 < 5; r2++) for (let c2 = 0; c2 < 5; c2++) { const cl2 = s.bd[r2][c2]; if (cl2?.cd.type === "being" && !cl2.fd) { if (cl2.ow === "ai") aiB++; else pB++; } }
-      const bDiff = aiB - pB;
+      const bDiff = aiBW - pBW;
       if (Math.abs(bDiff) >= 2) sc += bDiff * 20;
+      // Near-presence: 1 weighted point short of advantage
+      if (bDiff === 1) sc += 10;
     }
     return sc;
   }
   function aiPlan(init) {
+    const phase = aiPhase(init);
+    const FREE_TYPES = new Set(["FLIP_FIELD", "FLIP_TRAP", "FLIP_BEING", "TERRAIN", "SET_BEING"]);
     let bestScore = aiScore(init), bestSeq = [];
     function search(s, seq) {
       const sc = aiScore(s); if (sc > bestScore) { bestScore = sc; bestSeq = [...seq]; }
-      if (seq.length >= 3 || s.act <= 0 || s.ph !== "playing") return;
+      const paidCount = seq.filter(a => (a.cost ?? 1) > 0 && !FREE_TYPES.has(a.type)).length;
+      if (paidCount >= 3 || (s.act <= 0 && (s.flips || 0) >= 2) || s.ph !== "playing" || seq.length >= 6) return;
       const acts = aiActions(s);
       // Detect if player can win with spells from their current hand this turn
       const pIsLight = s.pRole === "light";
@@ -2260,14 +2415,39 @@ export default function Trinity() {
       const pWinSpells = s.pH.filter(c => pIsLight ? c.type === "bless" : c.type === "curse").map(c => cPwr(c)).sort((a, b) => b - a).slice(0, 3);
       const pCanWin = cToWin > 0 && pWinSpells.reduce((a, b) => a + b, 0) >= cToWin;
       acts.forEach(a => { if (a.type === "PLAY_SPELL") a.isUrgent = pCanWin; });
-      acts.sort((a, b) => { const rank = x => x.isLethal ? 1000 : x.isUrgent ? 900 : x.type === "ATTACK" && x.val > 0 ? 100 + x.val : x.type === "SET_BATTLE" && x.val > 0 ? 95 + x.val : x.type === "TRIBUTE_SUMMON" ? 60 : x.type === "SUMMON" ? 55 : x.type === "EQUIP" ? 45 : x.type === "MOVE" ? 40 : x.type === "TERRAIN" ? 35 : x.type === "SET_BEING" ? 25 : x.type === "PLAY_SPELL" ? 20 : x.type === "SET_TRAP" ? (x.bluff ? 38 + Math.random() * 20 : 10) : x.type === "SET_EQUIP" ? (x.bluff ? 36 + Math.random() * 20 : 5) : 2; return rank(b) - rank(a); });
+      const spellRank = phase === "late" ? 50 : 20;
+      acts.sort((a, b) => {
+        const rank = x =>
+          x.isLethal ? 1000 :
+          x.isUrgent ? 900 :
+          x.type === "FLIP_TRAP" && x.isLethal ? 950 :
+          x.type === "ATTACK" && x.val > 0 ? 100 + x.val :
+          x.type === "SET_BATTLE" && x.val > 0 ? 95 + x.val :
+          x.type === "FLIP_TRAP" ? 80 + Math.abs(x.cVal || 0) * 5 :
+          x.type === "FLIP_FIELD" ? 70 + (x.buffCount || 0) * 10 :
+          x.type === "FLIP_BEING" ? 65 :
+          x.type === "TRIBUTE_SUMMON" ? 60 :
+          x.type === "PLAY_FIELD" ? 58 :
+          x.type === "SUMMON" ? 55 + (x.placeFit || 0) :
+          x.type === "EQUIP" ? 45 + (x.eqFit || 0) * 0.5 :
+          x.type === "TERRAIN" && x.intent === "buff" ? 42 :
+          x.type === "MOVE" ? 40 :
+          x.type === "TERRAIN" ? 35 :
+          x.type === "SET_BEING" ? 25 :
+          x.type === "PLAY_SPELL" ? spellRank :
+          x.type === "SET_TRAP" ? (x.bluff ? 38 + Math.random() * 20 : 10) :
+          x.type === "SET_EQUIP" ? (x.bluff ? 36 + Math.random() * 20 : 5) :
+          2;
+        return rank(b) - rank(a);
+      });
       const seen = {}; let tot = 0;
-      const lim = { ATTACK: 5, PLAY_SPELL: 2, MOVE: 6, SUMMON: 5, TRIBUTE_SUMMON: 3, EQUIP: 4, TERRAIN: 3, SET_TRAP: 3, SET_EQUIP: 2, SET_BEING: 3, SET_BATTLE: 3, DRAW: 1 };
+      const lim = { ATTACK: 5, PLAY_SPELL: 3, MOVE: 6, SUMMON: 5, TRIBUTE_SUMMON: 3, EQUIP: 4, TERRAIN: 4, SET_TRAP: 3, SET_EQUIP: 2, SET_BEING: 3, SET_BATTLE: 3, FLIP_FIELD: 2, FLIP_TRAP: 2, FLIP_BEING: 2, PLAY_FIELD: 2, DRAW: 1 };
       for (const a of acts) {
         if (a.isLethal) { const s2 = aiClone(s); aiApply(s2, a); search(s2, [...seq, a]); continue; }
-        seen[a.type] = (seen[a.type] || 0) + 1; if (seen[a.type] > (lim[a.type] || 3) || tot++ > 18) continue;
+        seen[a.type] = (seen[a.type] || 0) + 1; if (seen[a.type] > (lim[a.type] || 3) || tot++ > 22) continue;
         const s2 = aiClone(s); aiApply(s2, a);
-        if (seq.length > 0 && aiScore(s2) < bestScore - 150) continue;
+        const pruneThresh = FREE_TYPES.has(a.type) ? -80 : -150;
+        if (seq.length > 0 && aiScore(s2) < bestScore + pruneThresh) continue;
         search(s2, [...seq, a]);
       }
     }
@@ -2288,7 +2468,7 @@ export default function Trinity() {
     }
     if (idx === 0) { aiPlanRef.current = aiPlan(g); }
     const planned = aiPlanRef.current[idx];
-    if (!planned || g.act <= 0 || idx >= 10) {
+    if (!planned || g.act <= 0 || idx >= 12) {
       endAITurn({ ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD], pH: [...g.pH], pD: [...g.pD] }); return;
     }
     let s = { ...g, bd: g.bd.map(r => [...r]), aH: [...g.aH], aD: [...g.aD], pH: [...g.pH], pD: [...g.pD] };
@@ -2306,7 +2486,8 @@ export default function Trinity() {
         if (hi === -1) { endAITurn(s); return; }
         const sp = s.aH[hi];
         const v = sp.type === "bless" ? cPwr(sp) : -cPwr(sp);
-        s.aH.splice(hi, 1); s.act--;
+        const spellCost = (s.c === 0 && s.cMoved) ? 0 : 1;
+        s.aH.splice(hi, 1); s.act -= spellCost;
         if (sp.type === "bless") enqF(`+${cPwr(sp)}C`, { color: T.bless, border: T.bless, icon: "△", image: sp.image, video: videoFor(sp) });
         else enqF(`−${cPwr(sp)}C`, { color: T.curse, border: T.curse, icon: "▽", image: sp.image, video: videoFor(sp) });
         playSfx("action"); applyC(s, v);
@@ -2396,7 +2577,9 @@ export default function Trinity() {
         const item = s.aH.splice(hi, 1)[0]; const cl = s.bd[planned.row]?.[planned.col];
         if (!cl) { endAITurn(s); return; }
         cl.ib = { ...cl.ib }; STAT_DEFS.forEach(st => { cl.ib[st.key] = (cl.ib[st.key] || 0) + (item[st.key] || 0); });
-        s.act--; addLog(`Opp Equip: ${item.name || "Equip"}`); setGame({ ...s }); delay(800); break;
+        s.act--; addLog(`Opp Equip: ${item.name || "Equip"}`);
+        const eia = aura(item); setEqFlash({ r: planned.row, c: planned.col, aura: eia }); setTimeout(() => setEqFlash(null), 900);
+        setGame({ ...s }); delay(800); break;
       }
       case "SET_TRAP": {
         const hi = s.aH.findIndex(c => c.id === planned.card.id);
@@ -2469,6 +2652,39 @@ export default function Trinity() {
           }, 2000);
         }, 2000);
         break;
+      }
+      case "FLIP_FIELD": {
+        const { row: r, col: c } = planned; const cl = s.bd[r]?.[c];
+        if (!cl || cl.ow !== "ai" || !cl.fd || cl.cd.type !== "field") { runAI(s, idx + 1); return; }
+        s.bd[r][c] = { ...cl, fd: false }; s.flips = (s.flips || 0) + 1;
+        playSfx("action"); enqF("FIELD", { color: TC.field, border: TC.field, icon: "▣", image: cl.cd.image, video: videoFor(cl.cd) });
+        addLog(`Opp Field: ${cl.cd.name || "Field"} activated`); setGame({ ...s }); delay(cl.cd.image ? 2200 : 1500); break;
+      }
+      case "FLIP_TRAP": {
+        const { row: r, col: c } = planned; const cl = s.bd[r]?.[c];
+        if (!cl || cl.ow !== "ai" || !cl.fd || (cl.cd.type !== "bless" && cl.cd.type !== "curse")) { runAI(s, idx + 1); return; }
+        const pwr = cPwr(cl.cd); const v = cl.cd.type === "bless" ? pwr : -pwr;
+        s.bd[r][c] = null; s.flips = (s.flips || 0) + 1;
+        if (cl.cd.type === "bless") { enqF(`+${pwr}C`, { color: T.bless, border: T.bless, icon: "△", image: cl.cd.image, video: videoFor(cl.cd) }); }
+        else { enqF(`−${pwr}C`, { color: T.curse, border: T.curse, icon: "▽", image: cl.cd.image, video: videoFor(cl.cd) }); }
+        playSfx("action"); applyC(s, v); toPit(cl.cd, "ai");
+        addLog(`Opp Trigger: ${cl.cd.name || cl.cd.type} (${v > 0 ? "+" : ""}${v}C)`); setGame({ ...s }); delay(hasVid(cl.cd) ? 3500 : cl.cd.image ? 2600 : 1500); break;
+      }
+      case "FLIP_BEING": {
+        const { row: r, col: c } = planned; const cl = s.bd[r]?.[c];
+        if (!cl || cl.ow !== "ai" || !cl.fd || cl.cd.type !== "being") { runAI(s, idx + 1); return; }
+        s.bd[r][c] = { ...cl, fd: false }; s.flips = (s.flips || 0) + 1;
+        playSfx("action"); enqF("REVEAL", { color: TC.being || T.being, border: TC.being || T.being, image: cl.cd.image, video: videoFor(cl.cd) });
+        addLog(`Opp Reveal: ${cl.cd.name || "Being"}`); setGame({ ...s }); delay(hasVid(cl.cd) ? 3500 : cl.cd.image ? 2600 : 1500); break;
+      }
+      case "PLAY_FIELD": {
+        const hi = s.aH.findIndex(c => c.id === planned.card.id);
+        if (hi === -1) { endAITurn(s); return; }
+        const card = s.aH[hi]; const { row: r, col: c } = planned;
+        if (s.bd[r][c]) { endAITurn(s); return; }
+        s.aH.splice(hi, 1); s.bd[r][c] = { cd: card, ow: "ai", fd: false, ib: { soul: 0, mind: 0, will: 0 } }; s.act--;
+        playSfx("action"); enqF("FIELD", { color: TC.field, border: TC.field, icon: "▣", image: card.image, video: videoFor(card) });
+        addLog(`Opp Field: ${card.name || "Field"}`); setGame({ ...s }); delay(hasVid(card) ? 3500 : card.image ? 2600 : 1500); break;
       }
       case "DRAW": {
         if (s.aD.length) { s.aH.push(s.aD.shift()); s.act--; }
@@ -3126,6 +3342,10 @@ export default function Trinity() {
 
                     // Zone mapping remains consistent to the visual row for bottom playing
                     const zone = vr < 2 ? `${T.curse}06` : vr > 2 ? `${T.bless}06` : "transparent";
+                    const isEqFlash = eqFlash && eqFlash.r === r && eqFlash.c === c;
+                    const eqFlashAnim = isEqFlash
+                      ? (eqFlash.aura > 0 ? "eqFlashGold" : eqFlash.aura < 0 ? "eqFlashRed" : "eqFlashWhite") + " 800ms ease-out forwards"
+                      : "";
 
                     return (
                       <div key={`${vr}-${vc}`} onClick={() => boardClick(vr, vc)} style={{
@@ -3133,7 +3353,7 @@ export default function Trinity() {
                         border: `1px solid ${h ? T.silver + "55" : sel ? T.silver : T.panelBorder}`,
                         borderRadius: 2, cursor: h || cell?.ow === mr ? "pointer" : "default",
                         display: "flex", alignItems: "stretch", justifyContent: "stretch",
-                        transition: "all .1s", animation: h ? "glow 1.5s ease-in-out infinite" : cell?.fd ? "trapGlow 2s ease-in-out infinite" : "none",
+                        transition: "all .1s", animation: eqFlashAnim || (h ? "glow 1.5s ease-in-out infinite" : cell?.fd ? "trapGlow 2s ease-in-out infinite" : "none"),
                         backgroundImage: !cell ? `linear-gradient(135deg,${zone},transparent)` : "none",
                         overflow: "hidden", padding: 1, height: "100%", width: "100%",
                       }}>
