@@ -2,8 +2,27 @@
 .env
 .vite/
 __pycache__/
-backend/data/
 dist/
 node_modules/
 public/images/
 public/videos/
+public/trinity
+
+# downloaded third-party sound packs for auditioning (licences forbid redistributing some as packs)
+sfx-candidates/
+
+# local game logs written by the backend
+public/games/
+
+# local scratch: stashed full card pool, simulation output, recordings, notes
+backup/
+sim-results.txt
+demo-data.zip
+*.mov
+
+# unused source images; anything in public/ is published with the site
+public/*.png
+
+# trailer sound design: sample bank, Monster Punch page, audition page (local only)
+trailer-sfx/
+sfx-audition.html

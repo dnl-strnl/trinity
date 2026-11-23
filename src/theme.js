@@ -72,3 +72,8 @@ export const TOKENS_START = 2;
 export const TOKENS_PER_WIN = 1;
 export const PACK_COST = 1;
 export const CARDS_PER_PACK = 4;
+
+// shared UI atoms (button/label/input styles) used across tabs
+export const B = (col, dis) => ({ padding: "8px 16px", background: dis ? THEME.panelBorder : col + "12", border: `1px solid ${dis ? THEME.panelBorder : col}`, borderRadius: 2, color: dis ? THEME.textDim : col, cursor: dis ? "not-allowed" : "pointer", fontFamily: FONT_UI, fontSize: 11, letterSpacing: 1, fontWeight: 700 });
+export const LBL = { fontFamily: FONT_UI, fontSize: 7, color: THEME.textDim, letterSpacing: 2, display: "block", marginBottom: 1, textTransform: "uppercase", fontWeight: 700 };
+export const INP = { width: "100%", padding: "4px 7px", background: THEME.bg2, border: `1px solid ${THEME.panelBorder}`, borderRadius: 2, color: THEME.text, fontFamily: FONT_BODY, fontSize: 12, outline: "none" };

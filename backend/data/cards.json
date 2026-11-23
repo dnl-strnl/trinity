@@ -1,1 +1,2902 @@
-[]
+[
+  {
+    "id": "ENT-02575",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,29%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/rcipdp59.webp"
+  },
+  {
+    "id": "ENT-02824",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,39%)",
+      "hsl(40,20%,19%)"
+    ],
+    "image": "/images/rzc38bkr.webp"
+  },
+  {
+    "id": "ENT-02956",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -1,
+    "will": 4,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,34%)",
+      "hsl(40,20%,17%)"
+    ],
+    "image": "/images/wl0w2hae.webp"
+  },
+  {
+    "id": "ENT-02963",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 0,
+    "will": 1,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,36%)",
+      "hsl(280,20%,18%)"
+    ],
+    "image": "/images/ajdgwfht.webp"
+  },
+  {
+    "id": "ENT-03028",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 0,
+    "will": 4,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,34%)",
+      "hsl(40,20%,17%)"
+    ],
+    "image": "/images/xixv3wdk.webp"
+  },
+  {
+    "id": "ENT-03033",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -1,
+    "will": 4,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,28%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/q1ukwlan.webp"
+  },
+  {
+    "id": "ENT-02887",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,21%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/lckhxfdy.webp"
+  },
+  {
+    "id": "ENT-02917",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,22%)",
+      "hsl(280,20%,11%)"
+    ],
+    "image": "/images/ri5e0fra.webp"
+  },
+  {
+    "id": "ENT-03119",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -4,
+    "will": 0,
+    "rarity": "legendary",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,26%,35%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/pyn4e4ns.webp"
+  },
+  {
+    "id": "ENT-03147",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": 0,
+    "rarity": "rare",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,25%,28%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/u7qbq7y7.webp"
+  },
+  {
+    "id": "ENT-03174",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 0,
+    "will": -4,
+    "rarity": "rare",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,37%)",
+      "hsl(280,20%,18%)"
+    ],
+    "image": "/images/u2gotetv.webp"
+  },
+  {
+    "id": "ENT-03283",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,33%)",
+      "hsl(40,20%,16%)"
+    ],
+    "image": "/images/mvhjnbi3.webp"
+  },
+  {
+    "id": "ENT-03303",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 0,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,32%)",
+      "hsl(280,20%,16%)"
+    ],
+    "image": "/images/t6i684q9.webp"
+  },
+  {
+    "id": "ENT-03390",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 0,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,26%,18%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/lcb6agud.webp"
+  },
+  {
+    "id": "ENT-03477",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 0,
+    "will": 4,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,19%)",
+      "hsl(40,20%,9%)"
+    ],
+    "image": "/images/ki9nwvtk.webp"
+  },
+  {
+    "id": "ENT-03551",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 1,
+    "will": -4,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,24%,18%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/l8b4iitx.webp"
+  },
+  {
+    "id": "ENT-03574",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 2,
+    "will": 0,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,22%,38%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/mvilvyqg.webp"
+  },
+  {
+    "id": "ENT-03581",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": 4,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,25%)",
+      "hsl(40,20%,12%)"
+    ],
+    "image": "/images/oncprvwg.webp"
+  },
+  {
+    "id": "ENT-03643",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 1,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,20%,21%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/ofn8wu7z.webp"
+  },
+  {
+    "id": "ENT-03657",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": -2,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,19%)",
+      "hsl(40,20%,9%)"
+    ],
+    "image": "/images/81xagrl0.webp"
+  },
+  {
+    "id": "ENT-03702",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": -1,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,18%)",
+      "hsl(40,20%,9%)"
+    ],
+    "image": "/images/npkz3rl9.webp"
+  },
+  {
+    "id": "ENT-03410",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 0,
+    "will": 4,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,38%)",
+      "hsl(40,20%,19%)"
+    ],
+    "image": "/images/942ukl8a.webp"
+  },
+  {
+    "id": "ENT-03425",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 0,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,36%)",
+      "hsl(280,20%,18%)"
+    ],
+    "image": "/images/vrghraeo.webp"
+  },
+  {
+    "id": "ENT-03485",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 0,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/mizclq3s.webp"
+  },
+  {
+    "id": "ENT-03538",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": -1,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,39%)",
+      "hsl(40,20%,19%)"
+    ],
+    "image": "/images/n8y9yhm6.webp"
+  },
+  {
+    "id": "ENT-03568",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 1,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/gavaxl2p.webp"
+  },
+  {
+    "id": "ENT-03651",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -4,
+    "will": 0,
+    "rarity": "common",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,34%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/l78zz3ju.webp"
+  },
+  {
+    "id": "ENT-03793",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -1,
+    "will": 4,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,20%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/fk1n2pow.webp"
+  },
+  {
+    "id": "ENT-03916",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": -1,
+    "will": 1,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/osnvsp69.webp"
+  },
+  {
+    "id": "ENT-03972",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": 4,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,37%)",
+      "hsl(40,20%,18%)"
+    ],
+    "image": "/images/oqqe7ttw.webp"
+  },
+  {
+    "id": "ENT-03998",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 1,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,39%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/b3dwpamh.webp"
+  },
+  {
+    "id": "ENT-04024",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 0,
+    "will": 1,
+    "rarity": "uncommon",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,23%,31%)",
+      "hsl(40,20%,15%)"
+    ],
+    "image": "/images/8ylahwr5.webp"
+  },
+  {
+    "id": "ENT-03992",
+    "name": "",
+    "type": "being",
+    "soul": 4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,26%)",
+      "hsl(40,20%,13%)"
+    ],
+    "image": "/images/9boj20nv.webp"
+  },
+  {
+    "id": "TER-00288",
+    "name": "",
+    "type": "field",
+    "soul": 4,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "R",
+    "weight": 100,
+    "image": "/images/45szz8l6.webp",
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ]
+  },
+  {
+    "id": "ENT-04104",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 0,
+    "will": -4,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,35%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/cj9vag58.webp"
+  },
+  {
+    "id": "ENT-04179",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -4,
+    "will": 2,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,33%)",
+      "hsl(280,20%,16%)"
+    ],
+    "image": "/images/rfzqjhp4.webp"
+  },
+  {
+    "id": "ENT-04211",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -4,
+    "will": 3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,29%)",
+      "hsl(280,20%,14%)"
+    ],
+    "image": "/images/v8plsc5t.webp"
+  },
+  {
+    "id": "ENT-04235",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": 1,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,37%)",
+      "hsl(40,20%,18%)"
+    ],
+    "image": "/images/9h4uizxh.webp"
+  },
+  {
+    "id": "ENT-04245",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -2,
+    "will": -4,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,23%,38%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/guu69van.webp"
+  },
+  {
+    "id": "ENT-04250",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -2,
+    "will": 4,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,23%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/c9xdl3xu.webp"
+  },
+  {
+    "id": "ENT-04274",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": -2,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,31%)",
+      "hsl(40,20%,15%)"
+    ],
+    "image": "/images/6o1u80bd.webp"
+  },
+  {
+    "id": "ENT-04286",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": -2,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,24%)",
+      "hsl(40,20%,12%)"
+    ],
+    "image": "/images/0eka6fkf.webp"
+  },
+  {
+    "id": "ENT-04316",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 3,
+    "will": -4,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,24%,25%)",
+      "hsl(280,20%,12%)"
+    ],
+    "image": "/images/99mswicv.webp"
+  },
+  {
+    "id": "ENT-04134",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 2,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,27%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/t6fvcah0.webp"
+  },
+  {
+    "id": "ENT-04171",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,35%)",
+      "hsl(40,20%,17%)"
+    ],
+    "image": "/images/g9b2jgwd.webp"
+  },
+  {
+    "id": "ENT-04072",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 0,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,32%)",
+      "hsl(280,20%,16%)"
+    ],
+    "image": "/images/gsfsqg84.webp"
+  },
+  {
+    "id": "ENT-04292",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -4,
+    "will": 0,
+    "rarity": "common",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,27%,32%)",
+      "hsl(280,20%,16%)"
+    ],
+    "image": "/images/uyh4or8p.webp"
+  },
+  {
+    "id": "EQU-00841",
+    "name": "",
+    "type": "equip",
+    "soul": 0,
+    "mind": 0,
+    "will": -4,
+    "rarity": "common",
+    "set": "S",
+    "weight": 100,
+    "image": "/images/zpfv2epo.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-04336",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 0,
+    "will": -3,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/f6lios5f.webp"
+  },
+  {
+    "id": "ENT-04404",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": -4,
+    "will": -1,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,25%)",
+      "hsl(280,20%,12%)"
+    ],
+    "image": "/images/ina7c7vb.webp"
+  },
+  {
+    "id": "ENT-04511",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -1,
+    "will": 4,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,31%)",
+      "hsl(40,20%,15%)"
+    ],
+    "image": "/images/67kg7ala.webp"
+  },
+  {
+    "id": "ENT-04514",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -2,
+    "will": -4,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,20%)",
+      "hsl(280,20%,10%)"
+    ],
+    "image": "/images/uzthqn9y.webp"
+  },
+  {
+    "id": "ENT-04529",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 1,
+    "will": 4,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/0n8v470x.webp"
+  },
+  {
+    "id": "ENT-04552",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": 1,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,29%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/73jhslm7.webp"
+  },
+  {
+    "id": "ENT-04407",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -4,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/bwkmp0sj.webp"
+  },
+  {
+    "id": "ENT-04474",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,26%,21%)",
+      "hsl(280,20%,10%)"
+    ],
+    "image": "/images/9ql5h03q.webp"
+  },
+  {
+    "id": "ENT-04547",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,32%)",
+      "hsl(40,20%,16%)"
+    ],
+    "image": "/images/9v7a1khq.webp"
+  },
+  {
+    "id": "ENT-04548",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 1,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,35%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/e865gf6r.webp"
+  },
+  {
+    "id": "ENT-04555",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": 0,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,24%,29%)",
+      "hsl(280,20%,14%)"
+    ],
+    "image": "/images/6yi05376.webp"
+  },
+  {
+    "id": "ENT-04564",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": 4,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/8hbt87q0.webp"
+  },
+  {
+    "id": "ENT-04434",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,30%)",
+      "hsl(280,20%,15%)"
+    ],
+    "image": "/images/n86in3an.webp"
+  },
+  {
+    "id": "ENT-04402",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,29%)",
+      "hsl(280,20%,14%)"
+    ],
+    "image": "/images/dx5ol0uc.webp"
+  },
+  {
+    "id": "ENT-04636",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,25%)",
+      "hsl(40,20%,12%)"
+    ],
+    "image": "/images/4c3i5lj0.webp"
+  },
+  {
+    "id": "ENT-04710",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": 1,
+    "rarity": "uncommon",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/31tor6gk.webp"
+  },
+  {
+    "id": "ENT-04716",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": -2,
+    "rarity": "uncommon",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,20%,18%)",
+      "hsl(40,20%,9%)"
+    ],
+    "image": "/images/3x6udpka.webp"
+  },
+  {
+    "id": "ENT-04572",
+    "name": "",
+    "type": "being",
+    "soul": -4,
+    "mind": 1,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,23%,27%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/6z6hqii0.webp"
+  },
+  {
+    "id": "ENT-04711",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -4,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,21%)",
+      "hsl(280,20%,10%)"
+    ],
+    "image": "/images/4wcv57gu.webp"
+  },
+  {
+    "id": "ENT-04741",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 0,
+    "will": 4,
+    "rarity": "common",
+    "set": "W",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,22%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/73inp6ze.webp"
+  },
+  {
+    "id": "ENT-04814",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -4,
+    "will": 1,
+    "rarity": "rare",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,26%,30%)",
+      "hsl(280,20%,15%)"
+    ],
+    "image": "/images/1a76pvqh.webp"
+  },
+  {
+    "id": "ENT-04832",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -4,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,35%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/3inukg1r.webp"
+  },
+  {
+    "id": "ENT-04799",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -4,
+    "will": 1,
+    "rarity": "uncommon",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,30%)",
+      "hsl(280,20%,15%)"
+    ],
+    "image": "/images/4r4ievq6.webp"
+  },
+  {
+    "id": "ENT-04834",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,20%,18%)",
+      "hsl(40,20%,9%)"
+    ],
+    "image": "/images/5nit5xrp.webp"
+  },
+  {
+    "id": "ENT-04895",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 2,
+    "will": -4,
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,27%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/xupae3bx.webp"
+  },
+  {
+    "id": "ENT-04922",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 4,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,32%)",
+      "hsl(40,20%,16%)"
+    ],
+    "image": "/images/39g8qg7t.webp"
+  },
+  {
+    "id": "ENT-04955",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 4,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,20%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/6l4r4xdn.webp"
+  },
+  {
+    "id": "EQU-01037",
+    "name": "",
+    "type": "equip",
+    "soul": 0,
+    "mind": -4,
+    "will": -1,
+    "rarity": "common",
+    "set": "Z",
+    "weight": 100,
+    "image": "/images/waj9tf42.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "EQU-01038",
+    "name": "",
+    "type": "equip",
+    "soul": 0,
+    "mind": 1,
+    "will": 4,
+    "rarity": "common",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "image": "/images/gphi4bju.webp"
+  },
+  {
+    "id": "ENT-02498",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 0,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,23%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/jhkyilw4.webp"
+  },
+  {
+    "id": "ENT-02508",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 0,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,22%,26%)",
+      "hsl(40,20%,13%)"
+    ],
+    "image": "/images/f0nqetgm.webp"
+  },
+  {
+    "id": "ENT-02503",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 1,
+    "will": 1,
+    "rarity": "rare",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,21%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/utbfdqj5.webp"
+  },
+  {
+    "id": "ENT-02515",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 0,
+    "will": -3,
+    "rarity": "uncommon",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,25%)",
+      "hsl(280,20%,12%)"
+    ],
+    "image": "/images/v0mjoa5s.webp"
+  },
+  {
+    "id": "ENT-02522",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -1,
+    "will": -1,
+    "rarity": "uncommon",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,22%,38%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/yzn1csj1.webp"
+  },
+  {
+    "id": "ENT-02564",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -1,
+    "will": -1,
+    "rarity": "common",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,23%,39%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/vknhzodl.webp"
+  },
+  {
+    "id": "ENT-02528",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -3,
+    "will": 0,
+    "rarity": "common",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,26%,23%)",
+      "hsl(280,20%,11%)"
+    ],
+    "image": "/images/kbqfr70g.webp"
+  },
+  {
+    "id": "ENT-02582",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": -1,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,33%)",
+      "hsl(280,20%,16%)"
+    ],
+    "image": "/images/v2b89ed6.webp"
+  },
+  {
+    "id": "ENT-02559",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": 1,
+    "will": 1,
+    "rarity": "common",
+    "set": "A",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,35%)",
+      "hsl(40,20%,17%)"
+    ],
+    "image": "/images/eyqz1aj9.webp"
+  },
+  {
+    "id": "BLE-00687",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "A",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/0g9c242c.webp"
+  },
+  {
+    "id": "BLE-00694",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "A",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/4g2icics.webp"
+  },
+  {
+    "id": "BLE-00704",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "A",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/93pz5uie.webp"
+  },
+  {
+    "id": "BLE-00725",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/qyp0j0d6.webp"
+  },
+  {
+    "id": "CUR-00729",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/tvgy5oj8.webp"
+  },
+  {
+    "id": "CUR-00819",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/ywkcu8ut.webp"
+  },
+  {
+    "id": "CUR-00821",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/qfnw5xuc.webp"
+  },
+  {
+    "id": "CUR-00831",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/yn9oyv9t.webp"
+  },
+  {
+    "id": "CUR-00692",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "A",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/skaaty3w.webp"
+  },
+  {
+    "id": "CUR-00795",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/zejxeur9.webp"
+  },
+  {
+    "id": "ENT-02573",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": 2,
+    "rarity": "rare",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,20%,31%)",
+      "hsl(170,20%,15%)"
+    ],
+    "image": "/images/j6m1g65c.webp"
+  },
+  {
+    "id": "ENT-02577",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -3,
+    "will": 0,
+    "rarity": "rare",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,30%)",
+      "hsl(280,20%,15%)"
+    ],
+    "image": "/images/g35qvciv.webp"
+  },
+  {
+    "id": "ENT-02606",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -1,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,26%,20%)",
+      "hsl(170,20%,10%)"
+    ],
+    "image": "/images/vti1q1db.webp"
+  },
+  {
+    "id": "ENT-02648",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -2,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,22%,37%)",
+      "hsl(170,20%,18%)"
+    ],
+    "image": "/images/bqvcrymn.webp"
+  },
+  {
+    "id": "ENT-02664",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 1,
+    "will": 1,
+    "rarity": "uncommon",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,23%)",
+      "hsl(40,20%,11%)"
+    ],
+    "image": "/images/avk9spto.webp"
+  },
+  {
+    "id": "ENT-02639",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 0,
+    "will": 3,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,29%,20%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/vp68368b.webp"
+  },
+  {
+    "id": "TER-00237",
+    "name": "",
+    "type": "field",
+    "soul": 1,
+    "mind": 2,
+    "will": 0,
+    "rarity": "rare",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "image": "/images/me5ex7bz.webp"
+  },
+  {
+    "id": "EQU-00501",
+    "name": "",
+    "type": "equip",
+    "soul": -1,
+    "mind": 0,
+    "will": -2,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "image": "/images/p4w1j7tn.webp"
+  },
+  {
+    "id": "EQU-00503",
+    "name": "",
+    "type": "equip",
+    "soul": 1,
+    "mind": 1,
+    "will": 1,
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "image": "/images/d7hg9jpx.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-02703",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 2,
+    "will": 0,
+    "rarity": "rare",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,27%,31%)",
+      "hsl(170,20%,15%)"
+    ],
+    "image": "/images/njin2jom.webp"
+  },
+  {
+    "id": "ENT-02704",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": -1,
+    "will": -1,
+    "rarity": "legendary",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,18%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/p0v0zdi6.webp"
+  },
+  {
+    "id": "ENT-02722",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 2,
+    "will": -2,
+    "rarity": "rare",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,22%,30%)",
+      "hsl(170,20%,15%)"
+    ],
+    "image": "/images/nucsd1eo.webp"
+  },
+  {
+    "id": "ENT-02752",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -1,
+    "will": 3,
+    "rarity": "uncommon",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,26%,27%)",
+      "hsl(40,20%,13%)"
+    ],
+    "image": "/images/n7p3g7kc.webp"
+  },
+  {
+    "id": "ENT-02903",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": -2,
+    "will": -1,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,22%,27%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/xyv2obfz.webp"
+  },
+  {
+    "id": "ENT-02914",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -3,
+    "will": -2,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,23%,31%)",
+      "hsl(280,20%,15%)"
+    ],
+    "image": "/images/p0xvzn9c.webp"
+  },
+  {
+    "id": "ENT-02916",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": 2,
+    "will": -3,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,24%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/p408onc4.webp"
+  },
+  {
+    "id": "ENT-02933",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 2,
+    "will": 0,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,25%)",
+      "hsl(280,20%,12%)"
+    ],
+    "image": "/images/4vu98gsd.webp"
+  },
+  {
+    "id": "ENT-02960",
+    "name": "",
+    "type": "being",
+    "soul": -1,
+    "mind": -2,
+    "will": -2,
+    "rarity": "rare",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,29%,23%)",
+      "hsl(280,20%,11%)"
+    ],
+    "image": "/images/oum8jwr3.webp"
+  },
+  {
+    "id": "ENT-03082",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -2,
+    "will": -3,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,22%,26%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/t13bnh1f.webp"
+  },
+  {
+    "id": "ENT-02923",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 0,
+    "will": 1,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,23%)",
+      "hsl(280,20%,11%)"
+    ],
+    "image": "/images/3x8ir81a.webp"
+  },
+  {
+    "id": "ENT-02934",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 0,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "G",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,29%,20%)",
+      "hsl(170,20%,10%)"
+    ],
+    "image": "/images/wv7n4rcm.webp"
+  },
+  {
+    "id": "EQU-00575",
+    "name": "",
+    "type": "equip",
+    "soul": -1,
+    "mind": -1,
+    "will": -2,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "image": "/images/afyj1dhe.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "EQU-00578",
+    "name": "",
+    "type": "equip",
+    "soul": 3,
+    "mind": 1,
+    "will": 0,
+    "rarity": "common",
+    "set": "G",
+    "weight": 100,
+    "image": "/images/09vsaz53.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-03175",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -1,
+    "will": -3,
+    "rarity": "rare",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,27%,22%)",
+      "hsl(280,20%,11%)"
+    ],
+    "image": "/images/pwndaw8g.webp"
+  },
+  {
+    "id": "ENT-03272",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": 2,
+    "will": -2,
+    "rarity": "uncommon",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,26%,28%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/opvoicpy.webp"
+  },
+  {
+    "id": "TER-00257",
+    "name": "",
+    "type": "field",
+    "soul": 1,
+    "mind": 3,
+    "will": 0,
+    "rarity": "legendary",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "image": "/images/bd3m2t4p.webp"
+  },
+  {
+    "id": "TER-00262",
+    "name": "",
+    "type": "field",
+    "soul": 0,
+    "mind": 3,
+    "will": 1,
+    "rarity": "rare",
+    "set": "L",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "image": "/images/2bhskvyi.webp"
+  },
+  {
+    "id": "EQU-00606",
+    "name": "",
+    "type": "equip",
+    "soul": 2,
+    "mind": 0,
+    "will": 2,
+    "rarity": "legendary",
+    "set": "L",
+    "weight": 100,
+    "image": "/images/1fx3026v.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "EQU-00610",
+    "name": "",
+    "type": "equip",
+    "soul": 0,
+    "mind": -3,
+    "will": -1,
+    "rarity": "common",
+    "set": "L",
+    "weight": 100,
+    "image": "/images/m94wnq0g.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "EQU-00614",
+    "name": "",
+    "type": "equip",
+    "soul": 1,
+    "mind": 2,
+    "will": 1,
+    "rarity": "common",
+    "set": "L",
+    "weight": 100,
+    "image": "/images/dacye4wa.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-03411",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 2,
+    "will": -2,
+    "rarity": "legendary",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,35%)",
+      "hsl(280,20%,17%)"
+    ],
+    "image": "/images/w4a47vwf.webp"
+  },
+  {
+    "id": "ENT-03441",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -1,
+    "will": -3,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,25%,18%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/2x6bdapb.webp"
+  },
+  {
+    "id": "ENT-03514",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 3,
+    "will": 0,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,26%,37%)",
+      "hsl(170,20%,18%)"
+    ],
+    "image": "/images/r27b2nj7.webp"
+  },
+  {
+    "id": "ENT-03555",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": -3,
+    "will": 0,
+    "rarity": "rare",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,22%,39%)",
+      "hsl(170,20%,19%)"
+    ],
+    "image": "/images/yfjh14s4.webp"
+  },
+  {
+    "id": "ENT-03659",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 0,
+    "will": -3,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,23%,36%)",
+      "hsl(170,20%,18%)"
+    ],
+    "image": "/images/ezcsoyiy.webp"
+  },
+  {
+    "id": "ENT-03670",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": -1,
+    "will": 2,
+    "rarity": "uncommon",
+    "set": "Q",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,27%,36%)",
+      "hsl(280,20%,18%)"
+    ],
+    "image": "/images/mvwov7qi.webp"
+  },
+  {
+    "id": "EQU-00684",
+    "name": "",
+    "type": "equip",
+    "soul": 1,
+    "mind": 1,
+    "will": 2,
+    "rarity": "common",
+    "set": "Q",
+    "weight": 100,
+    "image": "/images/yecerwj9.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-03776",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": 2,
+    "will": -2,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,37%)",
+      "hsl(40,20%,18%)"
+    ],
+    "image": "/images/sql76vjt.webp"
+  },
+  {
+    "id": "ENT-03791",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": -1,
+    "will": 3,
+    "rarity": "legendary",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,22%,31%)",
+      "hsl(170,20%,15%)"
+    ],
+    "image": "/images/6ulh73qu.webp"
+  },
+  {
+    "id": "ENT-03849",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 2,
+    "will": 2,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,20%,31%)",
+      "hsl(40,20%,15%)"
+    ],
+    "image": "/images/o8oz0ibc.webp"
+  },
+  {
+    "id": "ENT-03882",
+    "name": "",
+    "type": "being",
+    "soul": 0,
+    "mind": -3,
+    "will": 3,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(170,27%,18%)",
+      "hsl(170,20%,9%)"
+    ],
+    "image": "/images/tjruv9pz.webp"
+  },
+  {
+    "id": "ENT-03928",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": -2,
+    "will": 1,
+    "rarity": "rare",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,27%,26%)",
+      "hsl(280,20%,13%)"
+    ],
+    "image": "/images/e0pyhvbx.webp"
+  },
+  {
+    "id": "EQU-00774",
+    "name": "",
+    "type": "equip",
+    "soul": -1,
+    "mind": -3,
+    "will": 0,
+    "rarity": "common",
+    "set": "R",
+    "weight": 100,
+    "image": "/images/l33wcm84.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-04079",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 1,
+    "will": 3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,28%,29%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/f9wvs0bg.webp"
+  },
+  {
+    "id": "ENT-04094",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 3,
+    "will": -1,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,28%,39%)",
+      "hsl(280,20%,19%)"
+    ],
+    "image": "/images/pfk1bcka.webp"
+  },
+  {
+    "id": "ENT-04144",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": -3,
+    "will": 3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,23%,28%)",
+      "hsl(40,20%,14%)"
+    ],
+    "image": "/images/cix7kwke.webp"
+  },
+  {
+    "id": "ENT-04154",
+    "name": "",
+    "type": "being",
+    "soul": 2,
+    "mind": -2,
+    "will": 3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,27%,37%)",
+      "hsl(40,20%,18%)"
+    ],
+    "image": "/images/f5geq8jr.webp"
+  },
+  {
+    "id": "ENT-04165",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": 3,
+    "will": 1,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,24%,20%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/99ubkh0u.webp"
+  },
+  {
+    "id": "ENT-04231",
+    "name": "",
+    "type": "being",
+    "soul": 1,
+    "mind": 3,
+    "will": -3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,20%)",
+      "hsl(40,20%,10%)"
+    ],
+    "image": "/images/al181yk1.webp"
+  },
+  {
+    "id": "ENT-04269",
+    "name": "",
+    "type": "being",
+    "soul": -2,
+    "mind": 2,
+    "will": -3,
+    "rarity": "rare",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,20%,19%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/7iszritq.webp"
+  },
+  {
+    "id": "EQU-00874",
+    "name": "",
+    "type": "equip",
+    "soul": -2,
+    "mind": 0,
+    "will": -2,
+    "rarity": "common",
+    "set": "S",
+    "weight": 100,
+    "image": "/images/om697ols.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-04345",
+    "name": "",
+    "type": "being",
+    "soul": -3,
+    "mind": -1,
+    "will": 3,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(280,21%,18%)",
+      "hsl(280,20%,9%)"
+    ],
+    "image": "/images/961gr5wc.webp"
+  },
+  {
+    "id": "ENT-04475",
+    "name": "",
+    "type": "being",
+    "soul": 3,
+    "mind": 3,
+    "will": 1,
+    "rarity": "rare",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "hsl(40,21%,35%)",
+      "hsl(40,20%,17%)"
+    ],
+    "image": "/images/5o0p908a.webp"
+  },
+  {
+    "id": "TER-00309",
+    "name": "",
+    "type": "field",
+    "soul": 0,
+    "mind": -3,
+    "will": -1,
+    "rarity": "common",
+    "set": "U",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "image": "/images/a5bbbyih.webp"
+  },
+  {
+    "id": "TER-00316",
+    "name": "",
+    "type": "field",
+    "soul": -2,
+    "mind": -3,
+    "will": 0,
+    "rarity": "common",
+    "set": "W",
+    "weight": 100,
+    "image": "/images/ed6e6bw3.webp",
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ]
+  },
+  {
+    "id": "EQU-00952",
+    "name": "",
+    "type": "equip",
+    "soul": -3,
+    "mind": -1,
+    "will": -1,
+    "rarity": "legendary",
+    "set": "W",
+    "weight": 100,
+    "image": "/images/ja7mdtxw.webp",
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ]
+  },
+  {
+    "id": "ENT-04959",
+    "name": "",
+    "type": "being",
+    "rarity": "rare",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#4a3c2c",
+      "#2a1c10"
+    ],
+    "soul": -3,
+    "mind": 1,
+    "will": 3,
+    "image": "/images/6wl92mpu.webp"
+  },
+  {
+    "id": "ENT-04970",
+    "name": "",
+    "type": "being",
+    "rarity": "rare",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#4a3c2c",
+      "#2a1c10"
+    ],
+    "soul": 2,
+    "mind": 2,
+    "will": 3,
+    "image": "/images/1c6vbjmf.webp"
+  },
+  {
+    "id": "ENT-04978",
+    "name": "",
+    "type": "being",
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#4a3c2c",
+      "#2a1c10"
+    ],
+    "soul": 3,
+    "mind": -2,
+    "will": -1,
+    "image": "/images/6aszr3mb.webp"
+  },
+  {
+    "id": "ENT-04980",
+    "name": "",
+    "type": "being",
+    "rarity": "rare",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#4a3c2c",
+      "#2a1c10"
+    ],
+    "soul": 3,
+    "mind": -1,
+    "will": 3,
+    "image": "/images/6delxrmu.webp"
+  },
+  {
+    "id": "EQU-01121",
+    "name": "",
+    "type": "equip",
+    "rarity": "uncommon",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "soul": -1,
+    "mind": -1,
+    "will": -3,
+    "image": "/images/brv34n0o.webp"
+  },
+  {
+    "id": "EQU-01161",
+    "name": "",
+    "type": "equip",
+    "rarity": "uncommon",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "soul": 1,
+    "mind": 2,
+    "will": 2,
+    "image": "/images/ce365tli.webp"
+  },
+  {
+    "id": "EQU-01166",
+    "name": "",
+    "type": "equip",
+    "rarity": "uncommon",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "soul": 1,
+    "mind": 3,
+    "will": 1,
+    "image": "/images/uqazhtsb.webp"
+  },
+  {
+    "id": "EQU-01227",
+    "name": "",
+    "type": "equip",
+    "rarity": "uncommon",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "#3c3430",
+      "#1e1a18"
+    ],
+    "soul": 3,
+    "mind": 1,
+    "will": 1,
+    "image": "/images/x3hfnrmm.webp"
+  },
+  {
+    "id": "TER-00389",
+    "name": "",
+    "type": "field",
+    "rarity": "common",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -2,
+    "mind": 0,
+    "will": -1,
+    "image": "/images/y13uicyg.webp"
+  },
+  {
+    "id": "TER-00412",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "D",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -1,
+    "mind": -3,
+    "will": -1,
+    "image": "/images/ocl6lz4r.webp"
+  },
+  {
+    "id": "TER-00418",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -1,
+    "mind": -2,
+    "will": -1,
+    "image": "/images/bx7q1r0y.webp"
+  },
+  {
+    "id": "TER-00421",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "C",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -1,
+    "mind": -1,
+    "will": -3,
+    "image": "/images/e9ti0l4m.webp"
+  },
+  {
+    "id": "TER-00422",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -1,
+    "mind": -1,
+    "will": -2,
+    "image": "/images/be4ibars.webp"
+  },
+  {
+    "id": "TER-00423",
+    "name": "",
+    "type": "field",
+    "rarity": "common",
+    "set": "X",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": -1,
+    "mind": -1,
+    "will": -1,
+    "image": "/images/mqti6jp9.webp"
+  },
+  {
+    "id": "TER-00495",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": 1,
+    "mind": 0,
+    "will": 3,
+    "image": "/images/z4bbiqu5.webp"
+  },
+  {
+    "id": "TER-00538",
+    "name": "",
+    "type": "field",
+    "rarity": "common",
+    "set": "S",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": 2,
+    "mind": 1,
+    "will": 0,
+    "image": "/images/0h436ql9.webp"
+  },
+  {
+    "id": "TER-00539",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "R",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": 2,
+    "mind": 1,
+    "will": 2,
+    "image": "/images/kw1h47mp.webp"
+  },
+  {
+    "id": "TER-00578",
+    "name": "",
+    "type": "field",
+    "rarity": "uncommon",
+    "set": "Z",
+    "weight": 100,
+    "gradient": [
+      "#3a3828",
+      "#1c1a10"
+    ],
+    "soul": 3,
+    "mind": 0,
+    "will": 2,
+    "image": "/images/zf5xlyuc.webp"
+  },
+  {
+    "id": "BLE-01210",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "unassigned",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/qdv2u62s.webp"
+  },
+  {
+    "id": "BLE-01221",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "rare",
+    "set": "unassigned",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/26rjgc2s.webp"
+  },
+  {
+    "id": "CUR-01335",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "uncommon",
+    "set": "unassigned",
+    "weight": 100,
+    "power": 3,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/7u21gp84.webp"
+  },
+  {
+    "id": "BLE-01219",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "unassigned",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/o06l7i8a.webp"
+  },
+  {
+    "id": "CUR-01329",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "unassigned",
+    "weight": 100,
+    "power": 1,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/u47jbw0w.webp"
+  },
+  {
+    "id": "BLE-01262",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "legendary",
+    "set": "queue",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/6307bk7d.webp"
+  },
+  {
+    "id": "CUR-01408",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "queue",
+    "weight": 100,
+    "power": 2,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ],
+    "image": "/images/c6p91x4s.webp"
+  },
+  {
+    "id": "BLE-01306",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "legendary",
+    "set": "New Set",
+    "weight": 100,
+    "power": 1,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ],
+    "image": "/images/6v5s4d5c.webp"
+  },
+  {
+    "id": "BLE-01346",
+    "name": "",
+    "type": "bless",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "New Set",
+    "weight": 100,
+    "image": "/images/rxjhtg73.webp",
+    "power": 1,
+    "gradient": [
+      "#1972d7ff",
+      "#1c2838"
+    ]
+  },
+  {
+    "id": "CUR-01461",
+    "name": "",
+    "type": "curse",
+    "soul": 0,
+    "mind": 0,
+    "will": 0,
+    "rarity": "common",
+    "set": "New Set",
+    "weight": 100,
+    "image": "/images/79xkdodr.webp",
+    "power": 1,
+    "gradient": [
+      "#4a2028",
+      "#2a0c14"
+    ]
+  }
+]

@@ -1,0 +1,7 @@
+# Background music for LOCAL dev sessions only (npm run dev / start.sh).
+# Production builds (npm run build, VITE_LIVE=1) never read this file, and the music controls are hidden there.
+#
+# One YouTube link per line: watch, youtu.be, shorts, music.youtube links or bare video IDs.
+# Plays in order and loops. Lines starting with # are ignored.
+# Settings → Music overrides this list for one player; leave that box empty to use this file.
+

@@ -1,15 +1,17 @@
 """
 Trinity Backend — JSON-file persistence + image uploads.
 
-Run:  uvicorn server:app --reload --port 4000
+Run:  uvicorn server:app --reload --port 33333
 Data: ./data/*.json  (auto-created on first write)
-Docs: http://localhost:4000/docs
+Docs: http://localhost:33333/docs
 """
 
-import json, os, shutil, uuid, logging, random
+import json, os, shutil, uuid, logging, random, subprocess
+import urllib.request, urllib.error, urllib.parse
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from typing import Optional, Dict, List
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -192,6 +194,42 @@ DATA.mkdir(exist_ok=True)
 GAMES = PUBLIC / "games"
 GAMES.mkdir(parents=True, exist_ok=True)
 
+# Card art lives in a public Hugging Face dataset (images/<stem>.webp) and is cached on disk on first use
+ART_REPO = "dnl-strnl/dalle2exp-256"
+ART_CACHE = Path.home() / ".cache" / "trinity"
+ART_MISSING = set()  # stems the dataset doesn't have — don't re-ask HF
+ART_INDEX = None  # dataset listing for the art picker, fetched once per run
+
+def hf_get(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "trinity"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return r.read()
+
+def fetch_art(stem):
+    """Cached path of a dataset image, downloading it on first use. None if the dataset doesn't have it."""
+    dest = ART_CACHE / "images" / f"{stem}.webp"
+    if dest.exists():
+        return dest
+    if stem in ART_MISSING:
+        return None
+    try:
+        data = hf_get(f"https://huggingface.co/datasets/{ART_REPO}/resolve/main/images/{urllib.parse.quote(stem)}.webp")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            ART_MISSING.add(stem)
+        else:
+            log.warning(f"ART {stem} → HF returned {e.code}")
+        return None
+    except OSError as e:  # offline, timeout
+        log.warning(f"ART {stem} → {e}")
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f"{dest.name}.{uuid.uuid4().hex[:8]}.tmp")  # write-then-rename: concurrent requests never see a partial file
+    tmp.write_bytes(data)
+    tmp.replace(dest)
+    log.info(f"ART {stem} → cached ({len(data)} bytes)")
+    return dest
+
 def read_json(name, default=None):
     p = DATA / f"{name}.json"
     if p.exists():
@@ -208,8 +246,12 @@ def write_json(name, data):
     log.info(f"WRITE {name}.json → {size} entries ({p.stat().st_size} bytes)")
     return data
 
+def read_settings():
+    # Saved settings can predate newer keys — defaults fill the gaps
+    return {**DEFAULT_SETTINGS, **read_json("settings", {})}
+
 @app.get("/api/settings")
-def get_settings(): return read_json("settings", DEFAULT_SETTINGS)
+def get_settings(): return read_settings()
 
 @app.put("/api/settings")
 async def put_settings(request: Request):
@@ -226,7 +268,7 @@ def get_state():
         "collection": read_json("collection", {}),
         "tokens": read_json("tokens", 2),
         "audio_enabled": audio_env == "1",
-        "settings": read_json("settings", DEFAULT_SETTINGS),
+        "settings": read_settings(),
     }
 
 @app.put("/api/state")
@@ -300,13 +342,34 @@ def resolve_videos_batch(stems: str = ""):
         result[stem] = None
     return result
 
+@app.get("/images/{name}")
+def serve_image(name: str):
+    """Card art by stem (extension ignored): dataset cache first, then a local upload in public/images."""
+    art = fetch_art(Path(name).stem)
+    if art:
+        return FileResponse(art, media_type="image/webp", headers={"Cache-Control": "public, max-age=86400"})
+    local = PUBLIC / "images" / Path(name).name
+    if local.is_file():
+        return FileResponse(local)
+    raise HTTPException(status_code=404, detail=f"no art for {name}")
+
 @app.get("/api/images/list")
 def list_images():
-    img_dir = PUBLIC / "images"
-    if not img_dir.exists():
-        return []
-    exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"}
-    return sorted(f"/images/{f.name}" for f in img_dir.iterdir() if f.is_file() and f.suffix.lower() in exts)
+    """Every image in the art dataset; falls back to the last saved listing when HF is unreachable."""
+    global ART_INDEX
+    if ART_INDEX is not None:
+        return ART_INDEX
+    saved = ART_CACHE / "index.json"
+    try:
+        files = json.loads(hf_get(f"https://huggingface.co/api/datasets/{ART_REPO}"))["siblings"]
+    except (OSError, ValueError, KeyError) as e:
+        log.warning(f"ART listing → {e}")
+        return json.loads(saved.read_text()) if saved.exists() else []
+    ART_INDEX = sorted(f"/{f['rfilename']}" for f in files if f["rfilename"].startswith("images/"))
+    ART_CACHE.mkdir(parents=True, exist_ok=True)
+    saved.write_text(json.dumps(ART_INDEX))
+    log.info(f"ART listing → {len(ART_INDEX)} images")
+    return ART_INDEX
 
 @app.get("/api/images/exists")
 def image_exists(filename: str):
@@ -366,6 +429,29 @@ async def import_all(request: Request):
     log.info(f"IMPORT all state — {len(state)} keys")
     return await put_state(request)
 
+SCRIPTS = HERE.parent / "scripts"
+
+@app.post("/api/simulate")
+async def run_simulate(request: Request):
+    body = await request.json()
+    games = int(body.get("games", 200))
+    # harness.js plays the live rulebook (src/rules.js); `games` is the total across all deck pairings
+    cmd = ["node", str(SCRIPTS / "harness.js"), "--mode", "balance", "--games", str(games), "--json"]
+    log.info(f"SIMULATE: running {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            log.error(f"SIMULATE failed: {result.stderr}")
+            return {"error": result.stderr.strip() or "harness.js failed"}
+        data = json.loads(result.stdout.strip())
+        log.info(f"SIMULATE done: {len(data.get('results', []))} decks, {data.get('elapsed')}s")
+        return data
+    except subprocess.TimeoutExpired:
+        return {"error": "Simulation timed out (600s)"}
+    except json.JSONDecodeError as e:
+        log.error(f"SIMULATE JSON parse error: {e}")
+        return {"error": f"Invalid JSON from simulate.js: {e}"}
+
 @app.get("/api/health")
 def health():
     files = [f.name for f in DATA.glob("*.json")]
@@ -381,4 +467,4 @@ async def startup():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=4000)
+    uvicorn.run(app, host="0.0.0.0", port=33333)
